@@ -8,7 +8,7 @@ def multivariate_gaussian_pdf(X, mu, cov):
     p = norm_factor * np.exp( exp_factor )
     return p
 
-def measurement_model_landmark(particle_xy : np.array, landmark_xy : np.array, covariance : np.array, sensitivity : float, fpr : float, epsilon : float = 20) -> float :
+def measurement_model_landmark(particle_xy : np.array, landmark_xy : np.array, sensitivity : float, radius : float = 20) -> float :
     """
     Parameters
     =========
@@ -16,23 +16,19 @@ def measurement_model_landmark(particle_xy : np.array, landmark_xy : np.array, c
         The 1D array of the (x,y) coordinates of a particle.
     landmark_xy : np.array.
         The 1D array of the (x,y) coordinates of a landmark.
-    covariance : np.array.
-        The 2D array of the covariance matrix of the measurement model.
+    radius : np.array.
+        The detection range radius.
 
     Returns
     =========
     p: float.
         The probability of the landmark being measured by the particle provided.
     """
-    norm = 1./(sensitivity + fpr)
     diff = ( landmark_xy.reshape(2,1) - particle_xy.reshape(2,1) )
     distance = np.linalg.norm(diff)
-    g_pdf = multivariate_gaussian_pdf(landmark_xy, particle_xy, covariance)
-    p_match = None
-    if(distance <= epsilon):
-        p_match = sensitivity#norm * sensitivity * g_pdf
-    else:
-        p_match = 0.0 #norm * fpr * g_pdf
+    p_match = sensitivity
+    if(distance > radius):
+        p_match = 0.0
     return p_match
 
 def measurement_model_landmark_batch(particle_xy_array : np.array, landmark_xy : np.array, covariance : np.array) -> np.array:

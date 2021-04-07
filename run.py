@@ -13,9 +13,9 @@ DEFAULT_MSGS_DIR    = "C:/Users/carlo/Local_Workspace/Dataset"
 DEFAULT_ROUTES_DIR  = "C:/Users/carlo/Local_Workspace/Map/routes"
 DEFAULT_INIT_ROUTE  = 0
 DEFAULT_START_TS    = 1606589686447952032
-DEFAULT_ODOM_VARIANCE = 0.25
+DEFAULT_ODOM_VARIANCE = 0.8
 DEFAULT_INIT_VARIANCE = 10.0
-DEFAULT_MATCH_VARIANCE = 10.
+DEFAULT_DETECTION_RANGE_RADIUS = 10.
 DEFAULT_N_PARTICLES = 250
 DEFAULT_SENSITIVITY = 0.8
 DEFAULT_FPR = 0.1
@@ -42,7 +42,7 @@ class Filter:
         self.groundtruth = None
 
         # Data association
-        self.match_var = DEFAULT_MATCH_VARIANCE
+        self.match_var = DEFAULT_DETECTION_RANGE_RADIUS
         self.match_cov = np.diag([self.match_var, self.match_var])
         self.fex = CNNFeatureExtractor((self.extractor_im_size,self.extractor_im_size))
 
@@ -197,7 +197,7 @@ class Filter:
         likelihoods = np.empty((N,)) 
         for p_idx in range(N):
             p_xy = pointcloud[p_idx,:]
-            likelihood = data_association.measurement_model_landmark(p_xy, l_xy, self.match_cov, DEFAULT_SENSITIVITY, DEFAULT_FPR)
+            likelihood = data_association.measurement_model_landmark(p_xy, l_xy, DEFAULT_SENSITIVITY, radius=DEFAULT_DETECTION_RANGE_RADIUS)
             likelihoods[p_idx] = likelihood
 
         # Resample
