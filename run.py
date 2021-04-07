@@ -89,7 +89,7 @@ class Filter:
             route_info = yaml.load(f, Loader=yaml.FullLoader)
         idx = int(idx)
         self.ways[idx] = load_ways_from_dict(route_info["ways"], flag_to_utm=True)
-        route_landmarks = load_landmarks(route_info["landmarks"], self.fex)
+        route_landmarks = load_landmarks(route_info["landmarks"], self.fex, uids=self.landmarks["uid"].to_numpy())
         self.landmarks = Filter.df_append_non_duplicates(self.landmarks, route_landmarks)
         self.landmarks.reset_index(inplace=True,drop=True)
         self.viz.draw_route(idx, self.ways[idx])
