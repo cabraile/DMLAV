@@ -42,6 +42,7 @@ class Visualization:
         self.groundtruth_scatter_plots = {"main" : None, "zoom" : None}
         self.landmarks_scatter_plots = {"main" : None, "zoom" : None}
         self.camera_plot = None
+        self.already_plotted_routes = []
 
         # Iteractive figure
         plt.ion()
@@ -111,8 +112,8 @@ class Visualization:
             xs, ys = self.get_waypoints(way_df)
 
             # Plot the coordinates
-            self.self.routes_plots["main"] = self.axes["main"].plot(xs, ys, label=f"Route {route_id}")
-            self.self.routes_plots["zoom"] = self.axes["zoom"].plot(xs, ys)
+            self.routes_plots["main"] = self.axes["main"].plot(xs, ys, label=label)
+            self.routes_plots["zoom"] = self.axes["zoom"].plot(xs, ys)
         return 
 
     def draw_route(self, route_id : int, way_df: pd.DataFrame):

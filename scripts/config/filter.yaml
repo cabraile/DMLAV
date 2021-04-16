@@ -1,0 +1,2 @@
+n_particles: 15
+odom_variance: 0.01

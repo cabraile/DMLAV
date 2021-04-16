@@ -1,0 +1,7 @@
+
+dataset_dir: "C:/Users/carlo/Local_Workspace/Datasets/Dataset_DMBL"
+routes_dir: "C:/Users/carlo/Local_Workspace/Map/routes"
+init_route_id: 0
+init_position: 6.0
+init_variance: 10.0
+start_timestamp: 1606589686447952032

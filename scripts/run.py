@@ -1,66 +1,50 @@
-from modules.map_loader_yaml                                        import load_ways_from_dict, load_landmarks
-from modules.mcl                                                    import sample_particles, motion_model, measurement_model, low_variance_sampler
-from modules.data_manager                                           import DataManager
+from modules.demo.map_loader_yaml                            import load_ways_from_dict, load_landmarks
+from modules.demo.data_manager                               import DataManager
+from modules.demo.visualization                              import Visualization
 from modules.perception.feature_extractors.cnn_feature_extractor    import CNNFeatureExtractor
-from modules.perception.sign_detection.detector         import Detector
-from modules.visualization                              import Visualization
-from modules                                            import data_association
+from modules.perception.sign_detection.detector                     import Detector
+from modules.perception                                             import data_association
+from modules.filters.mcl_filter.mcl_dml_filter          import MCLDMLFilter
+from modules.metrics                                    import FilterMetrics
+
 import numpy as np
 import pandas as pd
 import yaml
 import utm
-from sklearn.cluster import KMeans
+import os
 
-DEFAULT_MSGS_DIR    = "C:/Users/carlo/Local_Workspace/Datasets/Dataset_DMBL"
-DEFAULT_ROUTES_DIR  = "C:/Users/carlo/Local_Workspace/Map/routes"
-DEFAULT_INIT_ROUTE  = 0
-DEFAULT_INIT_POSITION = 6.0
-DEFAULT_INIT_VARIANCE = 10.0
-DEFAULT_START_TS    = 1606589686447952032
-DEFAULT_VIZ_SKIP_FRAMES = 20
-
-DEFAULT_FEX_IMSIZE = 448
-#DEFAULT_FEX_IMSIZE = 224
-
-DEFAULT_N_PARTICLES = 30
-DEFAULT_ODOM_VARIANCE = 0.01 # original: 0.09
-DEFAULT_DETECTION_RANGE_RADIUS = 5.
-DEFAULT_SD_THRESHOLD = 0.85
-DEFAULT_SENSITIVITY = 0.9
-DEFAULT_FPR = 0.1
-DEFAULT_SD_USE_CPU = True
+# TODO list:
+# * Set a random seed for reproducibility purposes
+# * Further modularization. Maybe create a superclass and implement from it?
+# * Check external access of the Filter class. Maybe wrap for the dataset run?
+# * df_append_non_duplicates: put it on another file?
+# * Load args from yamls but instead of storing in single class variables, store whole dict
+# * Nomenclature: actually these are not the filters. Both MCLDML and GABDML are localization methods.
 
 class Filter: 
 
-    def __init__(self, n_particles : int):
-        """
-        Parameters
-        =======
-        n_particles: int.
-            The number of particles sampled for each route.
-        """
-        init_route = DEFAULT_INIT_ROUTE
+    def __init__(self):
+
+        self.cfg_dir = os.path.dirname(os.path.realpath(__file__)) + "/config"
+        filter_cfg_path = self.cfg_dir + "/filter.yaml"
+        perception_cfg_path = self.cfg_dir + "/perception.yaml"
+        visualization_cfg_path = self.cfg_dir + "/visualization.yaml"
+        dataset_cfg_path = self.cfg_dir + "/dataset.yaml"
+        self.args_from_yamls(filter_cfg_path,perception_cfg_path, dataset_cfg_path, visualization_cfg_path)
 
         # MCL
-        self.n_particles = n_particles
-        self.particles = sample_particles(mu = DEFAULT_INIT_POSITION, sigma = DEFAULT_INIT_VARIANCE ** 0.5, n_particles = self.n_particles, route_idx = init_route)
-        self.odom_variance = DEFAULT_ODOM_VARIANCE
-        self.extractor_im_size = DEFAULT_FEX_IMSIZE
-        self.max_w_particle_id = 0
-        self.avg_position = None
-        self.mean_abs_error = None
-        self.abs_error_sum = None
-        self.abs_error_count = 0
+        self.mcl_dml_filter = MCLDMLFilter()
+
+        # Metrics
+        self.metrics = FilterMetrics()
 
         # Data
-        self.data_manager  = DataManager(DEFAULT_MSGS_DIR)
+        self.data_manager  = DataManager(self.dataset_dir)
         self.groundtruth = None
 
         # Data association
-        self.match_var = DEFAULT_DETECTION_RANGE_RADIUS
-        self.match_cov = np.diag([self.match_var, self.match_var])
         self.fex = CNNFeatureExtractor((self.extractor_im_size,self.extractor_im_size))
-        self.sign_detection = Detector(threshold=DEFAULT_SD_THRESHOLD, flag_use_cpu=DEFAULT_SD_USE_CPU, reset_cache=False)
+        self.sign_detection = Detector(threshold=self.sign_detection_threshold, flag_use_cpu=self.sign_detection_use_cpu, reset_cache=False)
 
         # Map
         self.ways = {}
@@ -68,6 +52,33 @@ class Filter:
         
         # Interface Init
         self.viz = Visualization()
+        return
+
+    def args_from_yamls(self, filter_cfg_path : str, perception_cfg_path : str, dataset_cfg_path : str, visualization_cfg_path : str):
+        with open(filter_cfg_path, "r") as f_yaml:
+            args = yaml.load(f_yaml, Loader=yaml.FullLoader)
+            self.n_particles = args["n_particles"]
+            self.odom_variance = args["odom_variance"]
+        with open(perception_cfg_path, "r") as f_yaml:
+            args = yaml.load(f_yaml, Loader=yaml.FullLoader)
+            self.extractor_im_size = args["landmark_matcher_image_size"]
+            self.landmark_match_range_radius = args["landmark_matcher_range_radius"]
+            self.landmark_match_accuracy = args["landmark_matcher_accuracy"]
+            self.sign_detection_threshold = args["sign_detection_threshold"]
+            self.sign_detection_sensitivity = args["sign_detection_sensitivity"]
+            self.sign_detection_fpr = args["sign_detection_fpr"]
+            self.sign_detection_use_cpu = args["sign_detection_use_cpu"]
+        with open(visualization_cfg_path, "r") as f_yaml:
+            args = yaml.load(f_yaml, Loader=yaml.FullLoader)
+            self.skip_every_n_frames = args["skip_every_n_frames"]
+        with open(dataset_cfg_path, "r") as f_yaml:
+            args = yaml.load(f_yaml, Loader=yaml.FullLoader)
+            self.dataset_dir = args["dataset_dir"]
+            self.routes_dir = args["routes_dir"]
+            self.init_route_id = args["init_route_id"]
+            self.init_position = args["init_position"]
+            self.init_variance = args["init_variance"]
+            self.start_timestamp = args["start_timestamp"]
         return
 
     @staticmethod
@@ -104,76 +115,16 @@ class Filter:
         with open(path, "r") as f:
             route_info = yaml.load(f, Loader=yaml.FullLoader)
         idx = int(idx)
-        self.ways[idx] = load_ways_from_dict(route_info["ways"], flag_to_utm=True)
+        route = load_ways_from_dict(route_info["ways"], flag_to_utm=True)
+        self.mcl_dml_filter.add_route(idx, route)
         route_landmarks = load_landmarks(route_info["landmarks"], self.fex, uids=self.landmarks["uid"].to_numpy())
         if(route_landmarks is not None):
             self.landmarks = Filter.df_append_non_duplicates(self.landmarks, route_landmarks)
             self.landmarks.reset_index(inplace=True,drop=True)
-        self.viz.draw_route(idx, self.ways[idx])
+        self.viz.draw_route(idx, self.mcl_dml_filter.routes[idx])
         self.viz.update_landmarks( np.vstack(self.landmarks["coordinates"]) )
         return
     
-    def copy_to_route(self, from_idx : int, to_idx : int):
-        ids_copy = np.where( self.particles[:,1] == from_idx )
-        particles_copy = np.copy(self.particles[ids_copy,:]).reshape(-1,3)
-        particles_copy[:,1] = to_idx
-        stack = np.vstack([self.particles, particles_copy])
-        self.particles = stack
-        self.n_particles = self.particles.shape[0]
-        return
-
-    def particle_to_world_coordinates(self, particle: np.array):
-        """
-        Convert a particle from (x|r) to the world coordinates.
-        
-        Parameters
-        ===========
-        particle: numpy.array.
-            The particle's 1D array (x, r, w)
-        """
-        x, r, w = particle
-        r = int(r)
-        ways = self.ways[r]
-        cumulative_length = ways["cumulative_length"].to_numpy()
-
-        # Checks which in which way the particle belongs
-        if x < 0 :
-            way_id = 0
-        elif x > cumulative_length[-1]:
-            way_id = -1
-        else:
-            for way_id in range(cumulative_length.size - 1):
-                if ( cumulative_length[way_id] <= x ) and ( x <= cumulative_length[way_id + 1]  ):
-                    break
-
-        # Get the way's information
-        row = ways.iloc[way_id]
-        p_init = row.at["p_init"]
-        p_end = row.at["p_end"]
-        p_diff = p_end - p_init
-
-        # Convert to cartesian coordinates
-        angle = np.arctan2(p_diff[1], p_diff[0])
-        d = x - cumulative_length[way_id]
-        delta_array = d * np.array([np.cos(angle),np.sin(angle)])
-        p_coords = p_init + delta_array
-        return p_coords
-
-    def particles_to_pointcloud(self) -> np.array:
-        """
-        Provide the particles as a 2D array of their x,y positions.
-        Returns
-        ==========
-        coords_array: numpy.array.
-            (n_particles,2) array of the xy positions.
-        """
-        coords_array = np.empty((self.n_particles,2))
-        for row_id in range(self.n_particles):
-            particle = self.particles[row_id,:]
-            p_coords = self.particle_to_world_coordinates(particle)
-            coords_array[row_id, :] = p_coords
-        return coords_array
-
     def groundtruth_callback(self, data : dict):
         """
         Stores the groundtruth from the incoming data.
@@ -194,37 +145,20 @@ class Filter:
         odom_x = data["odometer"]["x"]
         odom = np.sum(odom_x)
         variance = len(data["odometer"]) * self.odom_variance
-        motion_model(self.particles, odom, variance)
-        self.max_w_particle_id = np.argmax(self.particles[:,2])
+        self.mcl_dml_filter.predict(odom, variance)
         return
 
     def landmark_association(self, image: np.array) -> bool:
         features = self.fex.extract(image)
         ds_features = np.vstack(self.landmarks["features"].to_numpy())
         m_id, m_s = data_association.match(features, ds_features)
-        m_name = self.landmarks["name"].to_numpy()[m_id] # DEBUG
         m_img = self.landmarks["rgb"].to_numpy()[m_id]
-        #if(m_s < 0.392): # 224!
-        #if m_s < 0.83: # 448 com GlobalMaxPool
-        if(m_s < 0.261): # 448!
+        if(m_s < 0.261):
             return False
         l_xy = (self.landmarks["coordinates"]).to_numpy()[m_id]
 
-        # Compute likelihood of measurement for each particle
-        pointcloud = self.particles_to_pointcloud()
-        N = pointcloud.shape[0]
-        likelihoods = np.empty((N,)) 
-        for p_idx in range(N):
-            p_xy = pointcloud[p_idx,:]
-            #w = self.particles[p_idx,2]
-            #likelihood = w * data_association.measurement_model_landmark(p_xy, l_xy, radius=DEFAULT_DETECTION_RANGE_RADIUS)
-            likelihood = data_association.measurement_model_landmark(p_xy, l_xy, radius=DEFAULT_DETECTION_RANGE_RADIUS)
-            likelihoods[p_idx] = likelihood
-
-        # Resample
-        ids = low_variance_sampler(likelihoods)
-        self.particles = self.particles[ids,:]
-        self.particles[:,2] = likelihoods[ids]
+        # Update weights and Resample
+        self.mcl_dml_filter.update_from_landmark(l_xy, self.landmark_match_range_radius)
         return True
 
     def segment_feature_association(self, image:np.array) -> bool:
@@ -246,41 +180,20 @@ class Filter:
         
         speed_limit = int(det)
 
-        # Compute likelihood of measurement for each particle
-        N = self.particles.shape[0]
-        likelihoods = np.empty((N,)) 
-        for p_idx in range(N):
-            x, r, w = self.particles[p_idx,]
-            #likelihood = w * data_association.measurement_model_segment_feature(x, self.ways[r],speed_limit, sensitivity=DEFAULT_SENSITIVITY, fpr=DEFAULT_FPR)
-            likelihood = data_association.measurement_model_segment_feature(x, self.ways[r],speed_limit, sensitivity=DEFAULT_SENSITIVITY, fpr=DEFAULT_FPR)
-            likelihoods[p_idx] = likelihood
-
-        # Resample
-        ids = low_variance_sampler(likelihoods)
-        self.particles = self.particles[ids,:]
-        self.particles[:,2] = likelihoods[ids]        
-        return True
-
-    def check_is_localized(self):
-        p_routes = self.particles[:,1]
-        unique_routes = set(p_routes)
-        if len(unique_routes) > 1:
-            return False
+        # Update weights and resample
+        self.mcl_dml_filter.update_from_segment_feature(speed_limit,self.sign_detection_sensitivity, self.sign_detection_fpr)     
         return True
 
     def image_callback(self, data : dict):
-        """ Performs weight update on the particles given data. Performs data association first. """
+        """ Performs weight update on the particles given data and resamples."""
         # Find best correspondence landmark
         image = data["image"]
-        flag_updated = False
-        flag_updated = self.landmark_association(image) and flag_updated
-        flag_updated = self.segment_feature_association(image) and flag_updated
-        if flag_updated:
-            self.max_w_particle_id = np.argmax(self.particles[:,2])
+        self.landmark_association(image)
+        self.segment_feature_association(image)
         return
 
-    def skip_timestamps(self, to_timestamp):
-        """ Skip unwanted timestamps. """
+    def skip_timestamps(self, to_timestamp : int):
+        """ Skip unwanted timestamps until to_timestamp (in nanoseconds). """
         while(self.data_manager.has_next()):
             data = self.data_manager.next()
 
@@ -297,16 +210,58 @@ class Filter:
         print("")
         return
 
+    def compute_metrics(self, curr_ts):
+        pc = self.mcl_dml_filter.get_particles_as_pointcloud()
+        is_localized = self.mcl_dml_filter.check_is_localized()
+
+        # Update the time metrics
+        self.metrics.set_current_ts(curr_ts, is_localized)
+        
+        # Update the root mean squared error metrics
+        if is_localized:
+            avg_position = np.average(pc,axis=0)
+            if(self.groundtruth is not None):
+                rmsd = np.linalg.norm( avg_position - self.groundtruth )
+                self.metrics.append_error(rmsd)
+        return
+
+    def update_interface(self):
+        # Metrics
+        elapsed_time = self.metrics.get_ellapsed_time()
+        time_localized = self.metrics.get_time_localized()
+        time_localized_prop = self.metrics.get_time_proportion_localized() * 100
+        mean_rmsd = self.metrics.get_rmsd_mean()
+        std_rmsd = self.metrics.get_rmsd_std()
+        max_rmsd = self.metrics.get_rmsd_max()
+        min_rmsd = self.metrics.get_rmsd_min()
+        title_txt = f"Ellapsed time: {elapsed_time:.2f}s. RMSD: {mean_rmsd:.2f}m(Std: {std_rmsd:.2f}; Max:  {max_rmsd:.2f}; Min: {min_rmsd:.2f}). Time localized: {time_localized:.2f}s ({time_localized_prop:.1f}%)."
+        
+        # Estimations
+        pointcloud = self.mcl_dml_filter.get_particles_as_pointcloud()
+
+        # Graphics
+        self.viz.update_title( title_txt )
+        self.viz.update_landmarks(np.vstack(self.landmarks["coordinates"]))
+        self.viz.update_particles(pointcloud)
+        if(self.groundtruth is not None):
+            self.viz.update_groundtruth(self.groundtruth)
+        self.viz.flush()
+        return
+
     def spin_once(self):
+        # Data input
         if not self.data_manager.has_next():
             return False
-
         data = self.data_manager.next()
-        curr_ts = data["timestamp"]
 
+        # For computing the time metrics purposes
+        curr_ts = data["timestamp"]
+        
+        # For computing the error metrics
         if data["groundtruth"] is not None:
             self.groundtruth_callback(data)
 
+        # Data used for filtering
         if data["odometer"] is not None:
             self.odom_callback(data)
 
@@ -315,28 +270,11 @@ class Filter:
             self.viz.update_camera( self.fex.adjust_image(data["image"]) )
 
         # Compute metrics
-        pc = self.particles_to_pointcloud()
-        if self.check_is_localized():
-            self.avg_position = np.average(pc,axis=0)
-            if(self.groundtruth is not None):
-                norm = np.linalg.norm( self.avg_position - self.groundtruth )
-                if(self.abs_error_sum is None):
-                    self.abs_error_count = 1
-                    self.abs_error_sum = norm
-                else:
-                    self.abs_error_count += 1
-                    self.abs_error_sum += norm
-                self.mean_abs_error = self.abs_error_sum / self.abs_error_count
+        self.compute_metrics(curr_ts)
 
         # Interface Update
-        if(self.data_manager.time_idx % DEFAULT_VIZ_SKIP_FRAMES == 0):
-            self.viz.update_title(f"Current timestamp: {curr_ts}s (Error {self.mean_abs_error}m)")
-            self.viz.update_landmarks(np.vstack(self.landmarks["coordinates"]))
-            ws = self.particles[:,2]
-            self.viz.update_particles(pc, ws)
-            if(self.groundtruth is not None):
-                self.viz.update_groundtruth(self.groundtruth)
-            self.viz.flush()
+        if(self.data_manager.time_idx % self.skip_every_n_frames == 0):
+            self.update_interface()
 
         return True
 
@@ -371,19 +309,20 @@ if __name__=="__main__":
     branch_ids_to_expand = [1,2,3]
 
     # Filter init
-    mcl_filter = Filter(n_particles=DEFAULT_N_PARTICLES)
-    mcl_filter.load_route_info(f"{DEFAULT_ROUTES_DIR}/init_route.yaml", 0)
-    mcl_filter.skip_timestamps(DEFAULT_START_TS)
+    mcl_filter = Filter()
+    mcl_filter.load_route_info(f"{mcl_filter.routes_dir}/init_route.yaml", 0)
+    mcl_filter.mcl_dml_filter.sample_on_route(mcl_filter.init_position, mcl_filter.init_variance, mcl_filter.init_route_id, mcl_filter.n_particles)
+    mcl_filter.skip_timestamps(mcl_filter.start_timestamp)
 
     steps = 0
     while(mcl_filter.spin_once()):
-        steps += 1
 
+        steps += 1
         if(steps % 50 != 0):
             continue
 
         # Check if branch is close to any of the particles
-        pointcloud = mcl_filter.particles_to_pointcloud()
+        pointcloud = mcl_filter.mcl_dml_filter.get_particles_as_pointcloud()
         expanded = []
         for exp_idx in range(len(branch_ids_to_expand)):
 
@@ -397,9 +336,9 @@ if __name__=="__main__":
             # and copy the particles to the other route
             if float(distances[closest_particle_id]) < 10:
                 b_name = branch_names[branch_id]
-                closest_route = int(mcl_filter.particles[closest_particle_id, 1])
-                mcl_filter.load_route_info(f"{DEFAULT_ROUTES_DIR}/{b_name}.yaml", branch_id)
-                mcl_filter.copy_to_route(closest_route, branch_id)
+                closest_route = int(mcl_filter.mcl_dml_filter.particles[closest_particle_id, 1])
+                mcl_filter.load_route_info(f"{mcl_filter.routes_dir}/{b_name}.yaml", branch_id)
+                mcl_filter.mcl_dml_filter.copy_to_route(closest_route, branch_id)
                 expanded.append(exp_idx)
 
         # Remove expanded branches from list

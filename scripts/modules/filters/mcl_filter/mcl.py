@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 from modules.pdf import multivariate_gaussian_pdf, batch_univariate_gaussian_pdf
 
 def sample_particles(mu : float, sigma : float, n_particles : int , route_idx : int) -> np.array:
@@ -53,6 +54,7 @@ def motion_model(particles : np.array, odom : float, odom_variance : float):
     #particles[:,2] = new_ws
     return
 
+# TODO
 def measurement_model(particles : np.array, p_z_given_S : callable):
     """
     Update the particles' weights given the conditional of the measurement given the particle.
@@ -66,6 +68,71 @@ def measurement_model(particles : np.array, p_z_given_S : callable):
     """
     particles[:,2] = p_z_given_S(particles) * particles[:,2]
     return
+
+def measurement_model_segment_feature(x : float, ways : pd.DataFrame, speed_limit : int, sensitivity : float, fpr : float) -> float:
+    """
+    Parameters
+    ===========
+    x: float.
+        The accumulated offset of the agent
+    ways: pandas.DataFrame.
+        The ways of the route where the agent is contained.
+    speed_limit: int.
+        The measured speed limit.
+    sensitivity: float.
+        The sensitivity of the sign detection module.
+    fpr: float.
+        The false positive rate of the detection module.
+
+    Returns
+    ==========
+    prob: float.
+        The probability of detecting the sign at the particle's position.
+    """
+    # Find map value
+    N_ways = len(ways)
+    seq_id = 0
+    for seq_id in range(N_ways-1):
+        c_bef = ways.at[seq_id, "cumulative_length"] 
+        c_aft = ways.at[seq_id+1, "cumulative_length"] 
+        if x >= c_bef and x < c_aft:
+            break
+    true_speed_limit = ways.at[seq_id, "speed_limit"]
+
+    # Compute probability
+    norm = 1./(sensitivity + fpr)
+    prob = 1.0
+    if true_speed_limit != speed_limit:
+        prob = norm * fpr
+    else:
+        prob = norm * sensitivity
+    return prob
+
+def measurement_model_landmark(particle_xy : np.array, landmark_xy : np.array, radius : float = 20) -> float :
+    """
+    Parameters
+    =========
+    particle_xy : np.array.
+        The 1D array of the (x,y) coordinates of a particle.
+    landmark_xy : np.array.
+        The 1D array of the (x,y) coordinates of a landmark.
+    radius : np.array.
+        The detection range radius.
+
+    Returns
+    =========
+    p: float.
+        The probability of the landmark being measured by the particle provided.
+    """
+    std = radius/3
+    cov = np.diag( [ std ** 2, std ** 2 ] )
+    p_match = multivariate_gaussian_pdf(landmark_xy, particle_xy, cov)
+    #diff = ( landmark_xy.reshape(2,1) - particle_xy.reshape(2,1) )
+    #distance = np.linalg.norm(diff)
+    #p_match = 1.0
+    #if(distance > radius):
+    #    p_match = 0.0
+    return p_match
 
 def low_variance_sampler(weights : np.array) -> np.array:
     """
