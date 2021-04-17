@@ -1,2 +1,3 @@
-n_particles: 15
-odom_variance: 0.01
+n_particles: 50
+odom_variance: 0.09
+fuse_gps : True

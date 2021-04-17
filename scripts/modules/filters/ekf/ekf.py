@@ -55,7 +55,9 @@ class EKF:
         h = self.h
         I = np.eye(S.shape[0])
         mu = self.mean
-        factor = np.linalg.inv( np.dot( H, np.dot(S, H.T) + Q ) )
+        q1 = np.dot( H, np.dot(S, H.T) )
+        q2 = q1 + Q
+        factor = np.linalg.inv( q2 )
         K = np.dot( np.dot(S, H.T), factor )
         self.mean = mu + np.dot(K, (z - h(mu)))
         self.covariance = np.dot( ( I - np.dot(K, H) ), S )
@@ -67,6 +69,26 @@ class EKF:
 if __name__ == "__main__":
 
     import matplotlib.pyplot as plt
+
+    def motion_model_odometry_non_linear(u,x):
+        c = np.cos(x[2,0])
+        s = np.sin(x[2,0])
+        g_x = np.array([
+            [x[0,0] + c * u[0,0] - s * u[1,0] ],
+            [x[1,0] + s * u[0,0] + c * u[1,0]],
+            [x[2,0] + u[2,0]]
+        ])
+        return g_x
+
+    def motion_model_odometry_non_linear_jacobian(u,x):
+        c = np.cos(x[2,0])
+        s = np.sin(x[2,0])
+        G_x = np.array([
+            [1., 0., -s * u[0,0] - c * u[1,0] ],
+            [0., 1., c * u[0,0] - s * u[1,0]],
+            [0., 0., 1.]
+        ])
+        return G_x
 
     def motion_model_linear(u,x):
         return u + x
@@ -80,37 +102,37 @@ if __name__ == "__main__":
     def measurement_model_linear_jacobian(x):
         return np.eye(x.shape[0])
 
-    prior_mean = np.zeros((2,1)).reshape(2,1)
-    prior_covariance = np.diag([1e-3,1e-3])
+    prior_mean = np.zeros((3,1))
+    prior_covariance = np.diag([1e-3,1e-3,1e-4])
     kf = EKF(prior_mean, prior_covariance)
-    kf.set_motion_model(motion_model_linear)
-    kf.set_jacobian_motion_model(motion_model_linear_jacobian)
+    kf.set_motion_model(motion_model_odometry_non_linear)
+    kf.set_jacobian_motion_model(motion_model_odometry_non_linear_jacobian)
     kf.set_measurement_model(measurement_model_linear)
     kf.set_jacobian_measurement_model(measurement_model_linear_jacobian)
 
     est_position_list = []
     true_position_list = []
-    action_cov = np.diag([0.25, 0.25])
-    meas_cov = np.diag([0.01,0.01])
-    true_pos = np.zeros((2,1))
+    action_cov = np.diag([0.25, 0.25, 0.1])
+    meas_cov = np.diag([0.01,0.01, 0.001])
+    true_pos = np.zeros((3,1))
     
-    for i in range(500):
+    for i in range(5000):
         # Randomly chosen control action
-        freq = 1/10. * np.pi
+        freq = 1/5000. * np.pi
         r = 1.0
-        u = np.array( [ [np.cos(i * freq)], [np.sin(i * freq)]] ) #(np.random.rand(2,1) * 2)# - 1
-        true_pos += u
-        true_position_list.append(true_pos.flatten())
+        u = np.array( [ [r], [0.], [i * freq] ] ) #(np.random.rand(2,1) * 2)# - 1
+        true_pos = motion_model_odometry_non_linear(u,true_pos)
+        true_position_list.append(true_pos[:2].flatten())
 
         # Generate noise
-        u_noise = np.random.multivariate_normal(mean = u.flatten(), cov=action_cov).reshape(2,1)
-        z_noise = np.random.multivariate_normal(mean = true_pos.flatten(), cov=meas_cov).reshape(2,1)
+        u_noise = np.random.multivariate_normal(mean = u.flatten(), cov=action_cov).reshape(3,1)
+        z_noise = np.random.multivariate_normal(mean = true_pos.flatten(), cov=meas_cov).reshape(3,1)
 
         # Estimation
         kf.predict(u_noise,action_cov)
         kf.update(z_noise, meas_cov)
         est_pos = kf.get_mean()
-        est_position_list.append(est_pos.flatten())
+        est_position_list.append(est_pos[:2].flatten())
     est_position_array = np.vstack(est_position_list)
     true_position_array = np.vstack(true_position_list)
     mean_rmsd = np.average( np.linalg.norm( true_position_array - est_position_array, axis = 1 ) )

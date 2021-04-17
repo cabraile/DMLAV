@@ -1,5 +1,5 @@
 landmark_matcher_image_size: 448
-landmark_matcher_range_radius: 5.
+landmark_matcher_range_radius: 10.
 landmark_matcher_accuracy: 0.9
 sign_detection_threshold: 0.85
 sign_detection_sensitivity: 0.9

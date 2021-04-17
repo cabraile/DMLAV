@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 from matplotlib.collections import PathCollection
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes, mark_inset
+from matplotlib.patches import Ellipse
 import numpy as np
 import pandas as pd
 from typing import Union
@@ -40,8 +41,10 @@ class Visualization:
         self.routes_plots = {"main" : None, "zoom": None}
         self.particles_scatter_plots = {"main" : None, "zoom" : None}
         self.groundtruth_scatter_plots = {"main" : None, "zoom" : None}
+        self.estimation_scatter_plots = {"main" : None, "zoom" : None}
         self.landmarks_scatter_plots = {"main" : None, "zoom" : None}
         self.camera_plot = None
+        self.confidence_ellipse = {"main" : None, "zoom" : None}
         self.already_plotted_routes = []
 
         # Iteractive figure
@@ -69,6 +72,8 @@ class Visualization:
         self.groundtruth_scatter_plots["zoom"] = self.axes["zoom"].scatter([], [], color="red", s=100, marker="*")
         self.landmarks_scatter_plots["main"] = self.axes["main"].scatter([], [], color="green", s=200, marker="v", label="Landmark")
         self.landmarks_scatter_plots["zoom"] = self.axes["zoom"].scatter([], [], color="green", s=200, marker="v")
+        self.estimation_scatter_plots["main"] = self.axes["main"].scatter([], [], color="orange", s=100, marker="o", label="Estimation")
+        self.estimation_scatter_plots["zoom"] = self.axes["zoom"].scatter([], [], color="orange", s=100, marker="o")
         self.routes_plots["main"] = self.axes["main"].plot([], [])
         self.routes_plots["zoom"] = self.axes["zoom"].plot([], [])
 
@@ -79,6 +84,16 @@ class Visualization:
         plt.xlabel("Easting (in meters)")
         plt.ylabel("Northing (in meters)")
         return
+
+    @staticmethod
+    def from_covariance_to_ellipse_params(covariance : np.array, sigma : float = 3.0) -> Union[float, float, float]:
+        # Get ellipsis parameters
+        vals, vecs = np.linalg.eig(covariance)
+        max_eigval_id = np.argmax(vals)
+        max_eigvec = vecs[max_eigval_id].flatten()
+        angle = np.arctan2(max_eigvec[1], max_eigvec[0])
+        height, width = sigma * np.sqrt(vals)
+        return width, height, angle
 
     def get_waypoints(self, way_df : pd.DataFrame) -> Union[list,list]:
 
@@ -166,6 +181,25 @@ class Visualization:
         self.axes["zoom"].set_ylim(y - zoom, y + zoom)
         for axis_type in ["main", "zoom"]:
             self.groundtruth_scatter_plots[axis_type].set_offsets(groundtruth.reshape(1,-1))
+        return
+
+    def update_estimated_position(self, estimation : np.array, covariance : np.array):
+        cx,cy = (estimation[0], estimation[1])    
+        width, height, angle = Visualization.from_covariance_to_ellipse_params(covariance)
+        for axis_type in ["main", "zoom"]:
+            self.estimation_scatter_plots[axis_type].set_offsets( np.array([[cx, cy]]) )
+            if self.confidence_ellipse[axis_type] is None:
+                # Draw 
+                ellipse = Ellipse((cx, cy), width, height, angle)
+                ellipse.set_fill(False)
+                ellipse.set_linewidth(2)
+                self.confidence_ellipse[axis_type] = ellipse
+                self.axes[axis_type].add_patch(self.confidence_ellipse[axis_type])
+            else:
+                self.confidence_ellipse[axis_type].set_center((cx,cy))
+                self.confidence_ellipse[axis_type].set_angle(angle)
+                self.confidence_ellipse[axis_type].set_height(height)
+                self.confidence_ellipse[axis_type].set_width(width)
         return
 
     def update_camera(self, image : np.array):

@@ -108,6 +108,25 @@ def measurement_model_segment_feature(x : float, ways : pd.DataFrame, speed_limi
         prob = norm * sensitivity
     return prob
 
+def measurement_model_gaussian(particle_xy : np.array, measurement : np.array, covariance : np.array) -> float :
+    """
+    Parameters
+    =========
+    particle_xy : np.array.
+        The 1D array of the (x,y) coordinates of a particle.
+    measurement : np.array.
+        The 1D array of the (x,y) coordinates of a landmark.
+    covariance : np.array.
+        The uncertainty of the measurement.
+
+    Returns
+    =========
+    p: float.
+        The probability of the landmark being measured by the particle provided.
+    """
+    p_gauss = multivariate_gaussian_pdf(measurement, particle_xy, covariance)
+    return p_gauss
+
 def measurement_model_landmark(particle_xy : np.array, landmark_xy : np.array, radius : float = 20) -> float :
     """
     Parameters

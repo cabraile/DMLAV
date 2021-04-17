@@ -2,4 +2,5 @@
 .ipynb_checkpoints/
 __pycache__/
 .vscode/
-recognition_model*.data
+cache/
+.anotacoes.md

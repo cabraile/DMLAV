@@ -23,6 +23,9 @@ class DataManager:
         # Load odometer measurements to a pandas DataFrame - with timestamp
         self.data["odometer"] = pandas.read_csv(f"{msgs_dir}/odom.csv", sep=",", dtype={"timestamp" : ts_dtype}, index_col="timestamp")
 
+        # Load gps measurements to a pandas DataFrame - with timestamp
+        self.data["gps"] = pandas.read_csv(f"{msgs_dir}/gps_raw.csv", sep=",", dtype={"timestamp" : ts_dtype}, index_col="timestamp")
+
         # Load image path to a pandas Dataframe - with respective timestamps
         self.data["image"] =  pandas.read_csv(f"{msgs_dir}/images.csv", sep=",", dtype={"timestamp" : ts_dtype}, index_col="timestamp")
 
@@ -33,12 +36,13 @@ class DataManager:
         timestamps = \
             self.data["odometer"].index.tolist() + \
             self.data["image"].index.tolist() + \
+            self.data["gps"].index.tolist() + \
             self.data["groundtruth"].index.tolist()
 
         # Load compass measurements to a pandas DataFrame - with respective timestamps
-        #self.data["compass"] = {}
-        #self.data["compass"] = pandas.read_csv(f"{msgs_dir}/orientation.csv", sep=",", index_col="timestamp")
-        #timestamps += self.data["compass"].index.tolist()
+        self.data["compass"] = {}
+        self.data["compass"] = pandas.read_csv(f"{msgs_dir}/orientation.csv", sep=",", index_col="timestamp")
+        timestamps += self.data["compass"].index.tolist()
 
         timestamps = set(timestamps)    # Remove duplicates
         timestamps = list(timestamps)   # Required for sort
@@ -56,7 +60,7 @@ class DataManager:
         ret = {}
         ts = self.timestamps[self.time_idx]
         ret["timestamp"] = ts
-        for data_type in ["odometer", "image", "groundtruth"]:#, "compass"]:
+        for data_type in ["odometer", "image", "groundtruth", "compass", "gps"]:
             if(ts in self.data[data_type].index):
                 if(data_type != "image"):
                     ret[data_type] = self.data[data_type].loc[ts]
@@ -88,4 +92,3 @@ class DataManager:
         if(self.time_idx < len(self.timestamps)):
             return True
         return False
-

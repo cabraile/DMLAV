@@ -1,44 +1,31 @@
 import numpy as np
-import pandas as pd
-from typing import Union
-from modules.filters.mcl_filter.mcl import motion_model, measurement_model, sample_particles, low_variance_sampler, measurement_model_landmark, measurement_model_segment_feature, measurement_model_gaussian
-from sklearn.covariance import EmpiricalCovariance
 
-# TODO LIST:
-# * Remove weights from the state. They are only used during update.
-
-class MCLDMLFilter:
+class GABDML():
     
     def __init__(self):
         self.routes = {}
-        self.particles = None
-        self.n_particles = 0
+        self.hypotheses = []
         return
     
     # STATE
     # ==========================
 
+    def add_hypothesis(self, mean : float, variance : float, route : int):
+        
+        return
+
     def check_is_localized(self):
-        p_routes = self.particles[:,1]
-        unique_routes = set(p_routes)
-        if len(unique_routes) > 1:
-            return False
-        return True
+        if len(self.routes) == 1:
+            return True
+        return False
 
     def get_mean(self) -> np.array:
-        pointcloud = self.get_particles_as_pointcloud()
-        mean = np.mean( pointcloud, axis=0 )
         return 
     
     def get_covariance(self) -> np.array:
-        pointcloud = self.get_particles_as_pointcloud()
-        covariance = EmpiricalCovariance().fit(pointcloud).covariance_
-        return covariance
+        return 
     
     def get_mean_and_covariance(self) -> Union[np.array, np.array] :
-        pointcloud = self.get_particles_as_pointcloud()
-        mean = np.mean( pointcloud, axis=0 )
-        covariance = EmpiricalCovariance().fit(pointcloud).covariance_
         return mean, covariance
 
 
@@ -51,7 +38,7 @@ class MCLDMLFilter:
         self.routes[route_id] = ways
         return
     
-    def from_map_representation_to_xy(self, particle : np.array) -> np.array:
+    def from_map_representation_to_xy(self, hypothesis : np.array) -> np.array:
         """
         Convert a particle from (x,r) to the world coordinates.
         
@@ -65,7 +52,7 @@ class MCLDMLFilter:
         p_coords : np.array.
             The 1D array of the (x,y) position of the particle.
         """
-        x, r, w = particle
+        x, r, w = hypothesis
         r = int(r)
         ways = self.routes[r]
         cumulative_length = ways["cumulative_length"].to_numpy()
@@ -93,35 +80,10 @@ class MCLDMLFilter:
         p_coords = p_init + delta_array
         return p_coords
     
-    def get_particles_as_pointcloud(self) -> np.array:
-        """
-        Provide the particles as a 2D array of their x,y positions.
-        Returns
-        ==========
-        coords_array: numpy.array.
-            (n_particles,2) array of the xy positions.
-        """
-        coords_array = np.empty((self.n_particles,2))
-        for row_id in range(self.n_particles):
-            particle = self.particles[row_id,:]
-            p_coords = self.from_map_representation_to_xy(particle)
-            coords_array[row_id, :] = p_coords
-        return coords_array
-
     # ==========================
 
     # PARTICLES' MANAGEMENT
     # ==========================
-
-    def sample_on_route(self, mean : float, std : float, route_id : int, n_particles : int):
-        assert route_id in self.routes, "Error: route not initialized yet!"
-        particles = sample_particles(mu = mean, sigma = std, n_particles = n_particles, route_idx = route_id)
-        if( self.particles is None ):
-            self.particles = particles
-        else:
-            self.particles = np.vstack((self.particles, particles))
-        self.n_particles = self.particles.shape[0]
-        return
     
     def copy_to_route(self, from_idx : int, to_idx : int):
         ids_copy = np.where( self.particles[:,1] == from_idx )
@@ -181,17 +143,6 @@ class MCLDMLFilter:
 
         # Resample
         self.resample(likelihoods)   
-        return
-
-    def update_from_gps(self, measurement : np.array, covariance : np.array):
-        pointcloud = self.get_particles_as_pointcloud()
-        N = pointcloud.shape[0]
-        likelihoods = np.empty((N,)) 
-        for p_idx in range(N):
-            p_xy = pointcloud[p_idx,:]
-            likelihood = measurement_model_gaussian(p_xy, measurement, covariance)
-            likelihoods[p_idx] = likelihood
-        self.resample(likelihoods)
         return
 
     # ==========================
