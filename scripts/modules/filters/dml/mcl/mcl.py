@@ -11,7 +11,7 @@ from modules.features.global_positioning_feature import GlobalPositioningFeature
 # TODO LIST:
 # * Remove weights from the state. They are only used during update.
 
-class DMBMCL:
+class DMLMCL:
     
     def __init__(self):
         self.routes = {}
@@ -111,7 +111,7 @@ class DMBMCL:
         return
     
     def resample(self, weights : np.array):
-        ids = DMBMCL.low_variance_sampler(weights)
+        ids = DMLMCL.low_variance_sampler(weights)
         self.particles = self.particles[ids,:]
         return
 

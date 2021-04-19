@@ -7,18 +7,44 @@ class PipelineController:
     def __init__(self):
 
         self.pipeline_names = [
-            "MCL", "Dead Reckoning","GNSS","MCL + Odometry", "MCL + GNSS (A)", "MCL + GNSS + Odometry (A)", "MCL + GNSS (B)", "MCL + GNSS + Odometry (B)"
+            "Dead Reckoning","GNSS",
+            "MCL",
+            "MCL + Odometry",
+            "MCL + GNSS (A)", "MCL + GNSS + Odometry (A)",
+            "MCL + GNSS (B)", "MCL + GNSS + Odometry (B)",
+            "GAPPF",
+            "GAPPF + Odometry", 
+            "GAPPF + GNSS (A)", "GAPPF + GNSS + Odometry (A)", 
+            "GAPPF + GNSS (B)", "GAPPF + GNSS + Odometry (B)"
         ]
         self.pipelines_names_that_use_MCL = [
-            "MCL", "MCL + Odometry", "MCL + GNSS (A)", "MCL + GNSS + Odometry (A)", "MCL + GNSS (B)", "MCL + GNSS + Odometry (B)"
+            "MCL", "MCL + Odometry", 
+            "MCL + GNSS (A)", "MCL + GNSS + Odometry (A)",
+            "MCL + GNSS (B)", "MCL + GNSS + Odometry (B)"
+        ]
+        self.pipelines_names_that_use_GAPPF = [
+            "GAPPF", 
+            "GAPPF + Odometry", 
+            "GAPPF + GNSS (A)", "GAPPF + GNSS + Odometry (A)", 
+            "GAPPF + GNSS (B)", "GAPPF + GNSS + Odometry (B)"
         ]
         self.pipeline_names_that_use_odometry = [
-            "Dead Reckoning","MCL + Odometry", "MCL + GNSS + Odometry (A)", "MCL + GNSS + Odometry (B)"
+            "Dead Reckoning",
+            "MCL + Odometry", "MCL + GNSS + Odometry (A)", "MCL + GNSS + Odometry (B)",
+            "GAPPF + Odometry", "GAPPF + GNSS + Odometry (A)", "GAPPF + GNSS + Odometry (B)"
         ]
-        # The approaches (A) fuse GNSS data on the MCL filter, but not in the EKF
+        # The approaches (A) fuse GNSS data on the filters, but not in the EKF
         self.pipeline_names_that_use_gnss = [
-            "GNSS", "MCL + GNSS (B)", "MCL + GNSS + Odometry (B)"
+            "GNSS", 
+            "MCL + GNSS (B)", "MCL + GNSS + Odometry (B)",
+            "GAPPF + GNSS (B)", "GAPPF + GNSS + Odometry (B)"
         ]
+
+        # Check if all names are consistent
+        all_names = set( self.pipeline_names_that_use_odometry + self.pipeline_names_that_use_gnss +\
+                    self.pipelines_names_that_use_MCL + self.pipelines_names_that_use_GAPPF )
+        differ = all_names ^ set ( self.pipeline_names ) 
+        assert  all_names == set ( self.pipeline_names ), f"Error: some names differs from the pipeline names: {differ}"
 
         # Init the EKF and trajectory dictionaries, but not instantiate any yet
         self.ekf = {}
@@ -96,6 +122,15 @@ class PipelineController:
                 self.ekf[p_name].update(mean.reshape(2,1), cov)
         return
 
+    def gappf_update(self, mean, cov, is_localized):
+        if is_localized:
+            # Covariance cannot be close to zero - so underestimate the MCL measurement is a possibility.
+            if np.abs(np.linalg.det(cov)) < 1e-9:
+                vmax= np.abs(np.max(cov))
+                cov = np.diag([vmax,vmax])
+            for p_name in self.pipelines_names_that_use_GAPPF:
+                self.ekf[p_name].update(mean.reshape(2,1), cov)
+        return
 
     # METRICS
     # ======================

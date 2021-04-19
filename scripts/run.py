@@ -4,7 +4,7 @@ from modules.demo.visualization                              import Visualizatio
 from modules.perception.feature_extractors.cnn_feature_extractor    import CNNFeatureExtractor
 from modules.perception.sign_detection.detector                     import Detector
 from modules.perception                                             import data_association
-from modules.filters.dml.mcl.mcl                        import DMBMCL
+from modules.filters.dml.mcl.mcl                        import DMLMCL
 from modules.filters.dml.pf.gap_pf                      import GAPPF
 from modules.filters.ekf.ekf_pose_2d                    import EKFPose2D
 from modules.metrics                                    import FilterMetrics
@@ -25,6 +25,7 @@ import os
 # * Load args from yamls but instead of storing in single class variables, store whole dict
 
 DEFAULT_RANDOM_SEED = 0
+DEFAULT_PRUNE_GAMMA = 0.3
 
 class Wrapper: 
 
@@ -32,42 +33,21 @@ class Wrapper:
 
         np.random.seed(DEFAULT_RANDOM_SEED)
 
-        self.cfg_dir = os.path.dirname(os.path.realpath(__file__)) + "/config"
-        filter_cfg_path = self.cfg_dir + "/filter.yaml"
-        perception_cfg_path = self.cfg_dir + "/perception.yaml"
-        visualization_cfg_path = self.cfg_dir + "/visualization.yaml"
-        dataset_cfg_path = self.cfg_dir + "/dataset.yaml"
+        self.cfg_dir            = os.path.dirname(os.path.realpath(__file__)) + "/config"
+        filter_cfg_path         = self.cfg_dir + "/filter.yaml"
+        perception_cfg_path     = self.cfg_dir + "/perception.yaml"
+        visualization_cfg_path  = self.cfg_dir + "/visualization.yaml"
+        dataset_cfg_path        = self.cfg_dir + "/dataset.yaml"
         self.args_from_yamls(filter_cfg_path,perception_cfg_path, dataset_cfg_path, visualization_cfg_path)
 
-        # MCL
-        self.dml_mcl = DMBMCL()
+        # Filters
+        self.dml_mcl = DMLMCL()
+        self.dml_gappf = GAPPF(DEFAULT_PRUNE_GAMMA, self.n_particles)
         self.pipeline_controller = PipelineController()
-        #self.trajectories = {}
-        # EKF
-        # "mcl_odom" : odom + mcl
-        # "gps_only" : gps
-        # "mcl_gps" : mcl + gps
-        # "mcl_gps_odom" : mcl_gps_odom
-        #self.ekf_types = ["odom_only","mcl_odom", "gps_only", "mcl_gps", "mcl_gps_odom"]
-        #self.ekf_types_odom = ["odom_only", "mcl_odom", "mcl_gps_odom"]
-        #self.ekf_types_gps = ["gps_only", "mcl_gps", "mcl_gps_odom"]
-        #self.ekf_types_mcl = ["mcl_odom", "mcl_gps", "mcl_gps_odom"]
-        #self.visualize_type = "mcl_gps_odom"
-        #self.ekf = {}
-        #for ekf_type in self.ekf_types:
-        #    self.ekf[ekf_type] = None # Will be initialized with the first position of the groundtruth
-        #    self.trajectories[ekf_type] = []
-        # Metrics
-
-        #self.metrics = {} 
-        #for key in self.ekf_types:
-        #    self.metrics[key] = FilterMetrics()
-        #self.metrics["mcl_only"] = FilterMetrics()
 
         # Data
         self.data_manager  = DataManager(self.dataset_dir)
         self.groundtruth = None
-        #self.groundtruth_trajectory = []
 
         # Data association
         self.fex = CNNFeatureExtractor((self.extractor_im_size,self.extractor_im_size))
@@ -130,6 +110,7 @@ class Wrapper:
         idx = int(idx)
         route = load_ways_from_dict(route_info["ways"], flag_to_utm=True)
         self.dml_mcl.add_route(idx, route)
+        self.dml_gappf.add_route(idx, route)
         route_landmarks = load_landmarks(route_info["landmarks"], self.fex, uids=self.landmarks["uid"].to_numpy())
         if(route_landmarks is not None):
             self.landmarks = Wrapper.df_append_non_duplicates(self.landmarks, route_landmarks)
@@ -147,6 +128,7 @@ class Wrapper:
         if self.fuse_gps:
             feature = GlobalPositioningFeature(z, cov)
             self.dml_mcl.update(feature)
+            self.dml_gappf.update(feature)
         self.pipeline_controller.gps_update(z, cov)
         return
 
@@ -156,12 +138,14 @@ class Wrapper:
         landmark = LandmarkFeature(l_xy, cov)
         # Update weights and Resample
         self.dml_mcl.update(landmark)
+        self.dml_gappf.update(landmark)
         return
 
     def speed_limit_update(self, speed_limit : int):
         feature = SegmentFeature(speed_limit, "speed_limit",self.sign_detection_sensitivity, self.sign_detection_fpr)
         # Update weights and resample
         self.dml_mcl.update(feature)
+        self.dml_gappf.update(feature)
         return
 
     # ======================
@@ -251,8 +235,9 @@ class Wrapper:
             odom_y = odom_array[row,1]
             odom_yaw = odom_array[row,2]
             u = np.array([odom_x, odom_y, odom_yaw]).reshape(3,1)
-            # MCL
+            # DM Filters
             self.dml_mcl.predict(odom_x, variance)
+            self.dml_gappf.predict(odom_x, variance)
             # EKFs
             self.pipeline_controller.odometry_prediction(u, cov)
         return
@@ -310,12 +295,13 @@ class Wrapper:
     def update_interface(self):
         
         # Estimations
-        pointcloud = self.dml_mcl.get_particles_as_pointcloud()
-        
+        mcl_pointcloud = self.dml_mcl.get_particles_as_pointcloud()
+        gappf_mean, gappf_cov = self.dml_gappf.get_mean_and_covariance()
+
         # Graphics
-        #self.viz.update_title("")
         self.viz.update_landmarks(np.vstack(self.landmarks["coordinates"]))
-        self.viz.update_particles(pointcloud)
+        self.viz.update_particles(mcl_pointcloud)
+        self.viz.update_estimated_position(gappf_mean, gappf_cov, "GAPPF")
         if(self.groundtruth is not None):
             self.viz.update_groundtruth(self.groundtruth)
         self.viz.flush()
@@ -351,11 +337,17 @@ class Wrapper:
             self.gps_callback(data)
 
         # Update position for each ekf method that uses MCL
-        mean, cov = self.dml_mcl.get_mean_and_covariance()
         localized = self.dml_mcl.check_is_localized()
+        mean, cov = self.dml_mcl.get_mean_and_covariance()
         self.pipeline_controller.mcl_update(mean, cov, localized)
 
-        #self.store_current_poses_to_trajectories()
+        # Update position for each ekf method that uses GAPPF
+        localized = self.dml_gappf.check_is_localized()
+        mean, cov = self.dml_gappf.get_mean_and_covariance()
+        self.pipeline_controller.gappf_update(mean,cov, localized)
+
+        # The estimated states on each of the pipelines is appended so that
+        # the trajectory can be evaluated later
         self.pipeline_controller.append_current_state_to_trajectory()
 
         # Compute metrics
@@ -411,6 +403,7 @@ if __name__=="__main__":
     mcl_filter.pipeline_controller.init_ekf(**init_pose_dict)
     mcl_filter.load_route_info(f"{mcl_filter.routes_dir}/init_route.yaml", 0)
     mcl_filter.dml_mcl.sample_on_route(mcl_filter.init_position, mcl_filter.init_variance, mcl_filter.init_route_id, mcl_filter.n_particles)
+    mcl_filter.dml_gappf.add_hypothesis(mcl_filter.init_position, mcl_filter.init_variance, mcl_filter.init_route_id)
     mcl_filter.skip_timestamps(mcl_filter.start_timestamp)
     
     steps = 0
@@ -438,6 +431,7 @@ if __name__=="__main__":
                 closest_route = int(mcl_filter.dml_mcl.particles[closest_particle_id, 1])
                 mcl_filter.load_route_info(f"{mcl_filter.routes_dir}/{b_name}.yaml", branch_id)
                 mcl_filter.dml_mcl.copy_to_route(closest_route, branch_id)
+                mcl_filter.dml_gappf.copy_to_route(closest_route, branch_id)
                 expanded.append(exp_idx)
 
         # Remove expanded branches from list

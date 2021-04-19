@@ -92,8 +92,8 @@ class Visualization:
         max_eigval_id = np.argmax(vals)
         max_eigvec = vecs[max_eigval_id].flatten()
         angle = np.arctan2(max_eigvec[1], max_eigvec[0])
-        height, width = sigma * np.sqrt(vals)
-        return width, height, angle
+        width, height = sigma * np.sqrt(vals)
+        return height, width, angle
 
     def get_waypoints(self, way_df : pd.DataFrame) -> Union[list,list]:
 
@@ -183,16 +183,20 @@ class Visualization:
             self.groundtruth_scatter_plots[axis_type].set_offsets(groundtruth.reshape(1,-1))
         return
 
-    def update_estimated_position(self, estimation : np.array, covariance : np.array):
+    def update_estimated_position(self, estimation : np.array, covariance : np.array, method = ""):
         cx,cy = (estimation[0], estimation[1])    
-        width, height, angle = Visualization.from_covariance_to_ellipse_params(covariance)
+        height, width, angle = Visualization.from_covariance_to_ellipse_params(covariance)
         for axis_type in ["main", "zoom"]:
-            self.estimation_scatter_plots[axis_type].set_offsets( np.array([[cx, cy]]) )
+            #self.estimation_scatter_plots[axis_type].set_offsets( np.array([[cx, cy]]) )
             if self.confidence_ellipse[axis_type] is None:
                 # Draw 
                 ellipse = Ellipse((cx, cy), width, height, angle)
-                ellipse.set_fill(False)
-                ellipse.set_linewidth(2)
+                ellipse.set_fill(True)
+                ellipse.set_linewidth(4)
+                ellipse.set_label(method)
+                ellipse.set_alpha(0.5)
+                ellipse.set_edgecolor("black")
+                ellipse.set_facecolor("green")
                 self.confidence_ellipse[axis_type] = ellipse
                 self.axes[axis_type].add_patch(self.confidence_ellipse[axis_type])
             else:
