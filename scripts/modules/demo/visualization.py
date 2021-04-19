@@ -72,8 +72,8 @@ class Visualization:
         self.groundtruth_scatter_plots["zoom"] = self.axes["zoom"].scatter([], [], color="red", s=100, marker="*")
         self.landmarks_scatter_plots["main"] = self.axes["main"].scatter([], [], color="green", s=200, marker="v", label="Landmark")
         self.landmarks_scatter_plots["zoom"] = self.axes["zoom"].scatter([], [], color="green", s=200, marker="v")
-        self.estimation_scatter_plots["main"] = self.axes["main"].scatter([], [], color="orange", s=100, marker="o", label="Estimation")
-        self.estimation_scatter_plots["zoom"] = self.axes["zoom"].scatter([], [], color="orange", s=100, marker="o")
+        #self.estimation_scatter_plots["main"] = self.axes["main"].scatter([], [], color="orange", s=100, marker="o", label="Estimation")
+        #self.estimation_scatter_plots["zoom"] = self.axes["zoom"].scatter([], [], color="orange", s=100, marker="o")
         self.routes_plots["main"] = self.axes["main"].plot([], [])
         self.routes_plots["zoom"] = self.axes["zoom"].plot([], [])
 
@@ -81,8 +81,8 @@ class Visualization:
         self.camera_plot = self.axes["camera"].imshow( np.full((128,128,3),255) )
 
         # Figure details
-        plt.xlabel("Easting (in meters)")
-        plt.ylabel("Northing (in meters)")
+        self.axes["main"].set_xlabel("Easting (in meters)")
+        self.axes["main"].set_ylabel("Northing (in meters)")
         return
 
     @staticmethod

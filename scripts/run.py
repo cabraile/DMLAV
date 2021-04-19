@@ -4,9 +4,14 @@ from modules.demo.visualization                              import Visualizatio
 from modules.perception.feature_extractors.cnn_feature_extractor    import CNNFeatureExtractor
 from modules.perception.sign_detection.detector                     import Detector
 from modules.perception                                             import data_association
-from modules.filters.mcl_filter.mcl_dml_filter          import MCLDMLFilter
+from modules.filters.dml.mcl.mcl                        import DMBMCL
+from modules.filters.dml.pf.gap_pf                      import GAPPF
 from modules.filters.ekf.ekf_pose_2d                    import EKFPose2D
 from modules.metrics                                    import FilterMetrics
+from modules.features.global_positioning_feature        import GlobalPositioningFeature
+from modules.features.landmark_feature                  import LandmarkFeature
+from modules.features.segment_feature                   import SegmentFeature
+from modules.demo.pipeline_controller                   import PipelineController
 
 import numpy as np
 import pandas as pd
@@ -15,17 +20,17 @@ import utm
 import os
 
 # TODO list:
-# * Further modularization. Maybe create a superclass and implement from it?
 # * Check external access of the Wrapper class. Maybe wrap for the dataset run?
 # * df_append_non_duplicates: put it on another file?
 # * Load args from yamls but instead of storing in single class variables, store whole dict
-# * Nomenclature: actually these are not the filters. Both MCLDML and GABDML are localization methods.
+
+DEFAULT_RANDOM_SEED = 0
 
 class Wrapper: 
 
     def __init__(self):
 
-        np.random.seed(0)
+        np.random.seed(DEFAULT_RANDOM_SEED)
 
         self.cfg_dir = os.path.dirname(os.path.realpath(__file__)) + "/config"
         filter_cfg_path = self.cfg_dir + "/filter.yaml"
@@ -35,32 +40,34 @@ class Wrapper:
         self.args_from_yamls(filter_cfg_path,perception_cfg_path, dataset_cfg_path, visualization_cfg_path)
 
         # MCL
-        self.mcl_dml_filter = MCLDMLFilter()
-        self.trajectories = {}
+        self.dml_mcl = DMBMCL()
+        self.pipeline_controller = PipelineController()
+        #self.trajectories = {}
         # EKF
         # "mcl_odom" : odom + mcl
         # "gps_only" : gps
         # "mcl_gps" : mcl + gps
         # "mcl_gps_odom" : mcl_gps_odom
-        self.ekf_types = ["odom_only","mcl_odom", "gps_only", "mcl_gps", "mcl_gps_odom"]
-        self.ekf_types_odom = ["odom_only", "mcl_odom", "mcl_gps_odom"]
-        self.ekf_types_gps = ["gps_only", "mcl_gps", "mcl_gps_odom"]
-        self.ekf_types_mcl = ["mcl_odom", "mcl_gps", "mcl_gps_odom"]
-        self.visualize_type = "mcl_gps_odom"
-        self.ekf = {}
-        for ekf_type in self.ekf_types:
-            self.ekf[ekf_type] = None # Will be initialized with the first position of the groundtruth
-            self.trajectories[ekf_type] = []
+        #self.ekf_types = ["odom_only","mcl_odom", "gps_only", "mcl_gps", "mcl_gps_odom"]
+        #self.ekf_types_odom = ["odom_only", "mcl_odom", "mcl_gps_odom"]
+        #self.ekf_types_gps = ["gps_only", "mcl_gps", "mcl_gps_odom"]
+        #self.ekf_types_mcl = ["mcl_odom", "mcl_gps", "mcl_gps_odom"]
+        #self.visualize_type = "mcl_gps_odom"
+        #self.ekf = {}
+        #for ekf_type in self.ekf_types:
+        #    self.ekf[ekf_type] = None # Will be initialized with the first position of the groundtruth
+        #    self.trajectories[ekf_type] = []
         # Metrics
 
-        self.metrics = {} 
-        for key in self.ekf_types:
-            self.metrics[key] = FilterMetrics()
+        #self.metrics = {} 
+        #for key in self.ekf_types:
+        #    self.metrics[key] = FilterMetrics()
+        #self.metrics["mcl_only"] = FilterMetrics()
 
         # Data
         self.data_manager  = DataManager(self.dataset_dir)
         self.groundtruth = None
-        self.groundtruth_trajectory = []
+        #self.groundtruth_trajectory = []
 
         # Data association
         self.fex = CNNFeatureExtractor((self.extractor_im_size,self.extractor_im_size))
@@ -74,13 +81,6 @@ class Wrapper:
         self.viz = Visualization()
         return
 
-    def init_ekf(self, lat : float, lon : float, yaw : float, cov_diagonal : np.array):
-        x,y,_,_ = utm.from_latlon(lat, lon)
-        init_state = np.array([x, y, yaw]).reshape(3,1)
-        init_cov = np.diag([self.init_variance, self.init_variance, self.init_variance])
-        for key in self.ekf.keys():
-            self.ekf[key] = EKFPose2D(init_state, init_cov, motion_model_type="odometry", measurement_model_type="position")
-        return
 
     # INPUT
     # ============================
@@ -129,21 +129,47 @@ class Wrapper:
             route_info = yaml.load(f, Loader=yaml.FullLoader)
         idx = int(idx)
         route = load_ways_from_dict(route_info["ways"], flag_to_utm=True)
-        self.mcl_dml_filter.add_route(idx, route)
+        self.dml_mcl.add_route(idx, route)
         route_landmarks = load_landmarks(route_info["landmarks"], self.fex, uids=self.landmarks["uid"].to_numpy())
         if(route_landmarks is not None):
             self.landmarks = Wrapper.df_append_non_duplicates(self.landmarks, route_landmarks)
             self.landmarks.reset_index(inplace=True,drop=True)
-        self.viz.draw_route(idx, self.mcl_dml_filter.routes[idx])
+        self.viz.draw_route(idx, self.dml_mcl.routes[idx])
         self.viz.update_landmarks( np.vstack(self.landmarks["coordinates"]) )
         return
 
     # ============================
 
+    # UPDATES
+    # ======================
+
+    def gps_update(self, z, cov):
+        if self.fuse_gps:
+            feature = GlobalPositioningFeature(z, cov)
+            self.dml_mcl.update(feature)
+        self.pipeline_controller.gps_update(z, cov)
+        return
+
+    def landmark_update(self, l_xy : np.array):
+        std = self.landmark_match_range_radius / 3.0
+        cov = np.diag( [ std ** 2, std ** 2 ] )
+        landmark = LandmarkFeature(l_xy, cov)
+        # Update weights and Resample
+        self.dml_mcl.update(landmark)
+        return
+
+    def speed_limit_update(self, speed_limit : int):
+        feature = SegmentFeature(speed_limit, "speed_limit",self.sign_detection_sensitivity, self.sign_detection_fpr)
+        # Update weights and resample
+        self.dml_mcl.update(feature)
+        return
+
+    # ======================
+
     # DATA ASSOCIATION
     # ======================
 
-    def landmark_association(self, image: np.array) -> bool:
+    def detect_landmark(self, image: np.array) -> bool:
         features = self.fex.extract(image)
         ds_features = np.vstack(self.landmarks["features"].to_numpy())
         m_id, m_s = data_association.match(features, ds_features)
@@ -151,12 +177,10 @@ class Wrapper:
         if(m_s < 0.261):
             return False
         l_xy = (self.landmarks["coordinates"]).to_numpy()[m_id]
-
-        # Update weights and Resample
-        self.mcl_dml_filter.update_from_landmark(l_xy, self.landmark_match_range_radius)
+        self.landmark_update(l_xy)
         return True
 
-    def segment_feature_association(self, image:np.array) -> bool:
+    def detect_speed_limit_signs(self, image:np.array) -> bool:
         bboxes, labels, img_viz = self.sign_detection.detect_and_recognize(image)
 
         # Check if detected anything
@@ -174,9 +198,7 @@ class Wrapper:
             return False
         
         speed_limit = int(det)
-
-        # Update weights and resample
-        self.mcl_dml_filter.update_from_segment_feature(speed_limit,self.sign_detection_sensitivity, self.sign_detection_fpr)     
+        self.speed_limit_update(speed_limit)
         return True
 
     # ======================
@@ -194,17 +216,7 @@ class Wrapper:
             lon = gps_array[row,1]
             x,y,_,_ = utm.from_latlon(lat,lon)
             z = np.array([x,y]).reshape(2,1)
-            # Update only the MCL
-            if self.fuse_gps:
-                self.mcl_dml_filter.update_from_gps(z.flatten(), cov)
-            # Update the EKFs
-            for key in self.ekf.keys():
-                if not self.fuse_gps:
-                    if key in self.ekf_types_gps:
-                        self.ekf[key].update(z, cov)
-                else:
-                    if key == "mcl_only":
-                        self.ekf[key].update(z, cov)
+            self.gps_update(z,cov)
         return
 
     def groundtruth_callback(self, data : dict):
@@ -221,12 +233,14 @@ class Wrapper:
         x, y, _, _ = utm.from_latlon(lat, lon)
         xy = np.array([x,y])
         self.groundtruth = xy
+        self.pipeline_controller.set_current_groundtruth(xy)
         return
 
     def odom_callback(self, data: dict):
         """ Performs prediction on the particles given the odometry data. """
         variance = self.odom_variance
-        cov = np.diag([1e-2, 1e-2, 1e-3])
+        cov = np.diag([variance, variance, variance])
+        # Load from dataframe
         odom_df = data["odometer"]
         xs = odom_df["x"]
         ys = odom_df["y"]
@@ -236,46 +250,25 @@ class Wrapper:
             odom_x = odom_array[row,0]
             odom_y = odom_array[row,1]
             odom_yaw = odom_array[row,2]
-            self.mcl_dml_filter.predict(odom_x, variance)
             u = np.array([odom_x, odom_y, odom_yaw]).reshape(3,1)
-            for key in self.ekf.keys():
-                if key in self.ekf_types_odom:
-                    self.ekf[key].predict(u, cov)
-                else:
-                    self.ekf[key].predict(np.zeros((3,1)), cov) # Increase uncertainty
+            # MCL
+            self.dml_mcl.predict(odom_x, variance)
+            # EKFs
+            self.pipeline_controller.odometry_prediction(u, cov)
         return
 
     def image_callback(self, data : dict):
         """ Performs weight update on the particles given data and resamples."""
         # Find best correspondence landmark
         image = data["image"]
-        updated = self.landmark_association(image)
-        updated = self.segment_feature_association(image) or updated
+        updated = self.detect_landmark(image)
+        updated = self.detect_speed_limit_signs(image) or updated
         return
 
     # ======================
 
     # OTHERS
     # ============================
-
-    def update_ekf_using_mcl(self):
-        if self.mcl_dml_filter.check_is_localized() :
-            mean, cov = self.mcl_dml_filter.get_mean_and_covariance()
-            if np.abs(np.linalg.det(cov)) < 1e-9:
-                vmax= np.abs(np.max(cov))
-                cov = np.diag([vmax,vmax])
-            for method in self.ekf_types_mcl:
-                self.ekf[method].update(mean.reshape(2,1), cov)
-        return
-
-    def store_current_poses_to_trajectories(self):
-        for method in self.ekf.keys():
-            mean = self.ekf[method].get_mean()
-            cov = self.ekf[method].get_covariance()
-            pose_cov = np.hstack((mean.flatten(), cov.flatten()))
-            self.trajectories[method].append(pose_cov)
-        self.groundtruth_trajectory.append(self.groundtruth)
-        return
 
     @staticmethod
     def df_append_non_duplicates(a, b):
@@ -314,77 +307,19 @@ class Wrapper:
         print("")
         return
 
-    def compute_metrics(self, curr_ts, method):
-        is_localized = self.mcl_dml_filter.check_is_localized()
-
-        # Update the time metrics
-        self.metrics[method].set_current_ts(curr_ts, is_localized)
-        
-        avg_pose = self.ekf[method].get_mean().flatten()
-        avg_position = avg_pose[:2]
-        if(self.groundtruth is not None):
-            rmsd = np.linalg.norm( avg_position - self.groundtruth )
-            self.metrics[method].append_error(rmsd)
-        # Update the root mean squared error metrics
-        #if is_localized:
-        #    avg_position = np.average(pc,axis=0)
-        #    if(self.groundtruth is not None):
-        #        rmsd = np.linalg.norm( avg_position - self.groundtruth )
-        #        self.metrics[method].append_error(rmsd)
-        return
-
     def update_interface(self):
-        # Metrics
-        elapsed_time = self.metrics[self.visualize_type].get_ellapsed_time()
-        time_localized = self.metrics[self.visualize_type].get_time_localized()
-        time_localized_prop = self.metrics[self.visualize_type].get_time_proportion_localized() * 100
-        mean_rmsd = self.metrics[self.visualize_type].get_rmsd_mean()
-        std_rmsd = self.metrics[self.visualize_type].get_rmsd_std()
-        max_rmsd = self.metrics[self.visualize_type].get_rmsd_max()
-        min_rmsd = self.metrics[self.visualize_type].get_rmsd_min()
-        title_txt = f"Ellapsed time: {elapsed_time:.2f}s. RMSD: {mean_rmsd:.2f}m(Std: {std_rmsd:.2f}; Max:  {max_rmsd:.2f}; Min: {min_rmsd:.2f}). Time localized: {time_localized:.2f}s ({time_localized_prop:.1f}%)."
         
         # Estimations
-        pointcloud = self.mcl_dml_filter.get_particles_as_pointcloud()
-        e_mean = self.ekf[self.visualize_type].get_mean().flatten()[:2]
-        e_cov = self.ekf[self.visualize_type].get_covariance()[:2,:2].reshape(2,2)
-
+        pointcloud = self.dml_mcl.get_particles_as_pointcloud()
+        
         # Graphics
-        self.viz.update_title( title_txt )
+        #self.viz.update_title("")
         self.viz.update_landmarks(np.vstack(self.landmarks["coordinates"]))
-        self.viz.update_estimated_position(e_mean,e_cov)
         self.viz.update_particles(pointcloud)
         if(self.groundtruth is not None):
             self.viz.update_groundtruth(self.groundtruth)
         self.viz.flush()
         return
-
-    def flush_results(self, directory : str):
-        trajectory_array = np.vstack(self.groundtruth_trajectory)
-        np.savetxt(directory + f"/trajectory_groundtruth.csv", trajectory_array, delimiter=",", fmt="%.3f")
-        for method in self.ekf.keys():
-            trajectory_array = np.vstack(self.trajectories[method])
-            np.savetxt(directory + f"/trajectory_ekf_{method}.csv", trajectory_array, delimiter=",", fmt="%.3f")
-
-        with open(directory + "/results.csv", "w") as f_out:
-            header = "Method,Elapsed Time (s),Time Localized (s),Time Localized (%),Mean RMSD,Std RMSD,Max RMSD,Min RMSD\n"
-            print("-----------------------------------------------------------------------------------------")
-            print(header)
-            f_out.write(header)
-            for method in self.ekf.keys():
-                elapsed_time        = self.metrics[method].get_ellapsed_time()
-                time_localized      = self.metrics[method].get_time_localized()
-                time_localized_prop = self.metrics[method].get_time_proportion_localized() * 100
-                mean_rmsd           = self.metrics[method].get_rmsd_mean()
-                std_rmsd            = self.metrics[method].get_rmsd_std()
-                max_rmsd            = self.metrics[method].get_rmsd_max()
-                min_rmsd            = self.metrics[method].get_rmsd_min()
-                line = f"{method},{elapsed_time},{time_localized:.2f},{time_localized_prop:.2f},{mean_rmsd:.2f},{std_rmsd:.2f},{max_rmsd:.2f},{min_rmsd:.2f}\n"
-                f_out.write(line)
-                print(line)
-            print("-----------------------------------------------------------------------------------------")
-            
-        return 
 
     # ============================
 
@@ -416,13 +351,15 @@ class Wrapper:
             self.gps_callback(data)
 
         # Update position for each ekf method that uses MCL
-        self.update_ekf_using_mcl()
+        mean, cov = self.dml_mcl.get_mean_and_covariance()
+        localized = self.dml_mcl.check_is_localized()
+        self.pipeline_controller.mcl_update(mean, cov, localized)
 
-        self.store_current_poses_to_trajectories()
+        #self.store_current_poses_to_trajectories()
+        self.pipeline_controller.append_current_state_to_trajectory()
 
         # Compute metrics
-        for method in self.ekf_types:
-            self.compute_metrics(curr_ts, method)
+        self.pipeline_controller.compute_metrics()
 
         # Interface Update
         if(self.data_manager.time_idx % self.skip_every_n_frames == 0):
@@ -471,9 +408,9 @@ if __name__=="__main__":
     
     # Wrapper init
     mcl_filter = Wrapper()
-    mcl_filter.init_ekf(**init_pose_dict)
+    mcl_filter.pipeline_controller.init_ekf(**init_pose_dict)
     mcl_filter.load_route_info(f"{mcl_filter.routes_dir}/init_route.yaml", 0)
-    mcl_filter.mcl_dml_filter.sample_on_route(mcl_filter.init_position, mcl_filter.init_variance, mcl_filter.init_route_id, mcl_filter.n_particles)
+    mcl_filter.dml_mcl.sample_on_route(mcl_filter.init_position, mcl_filter.init_variance, mcl_filter.init_route_id, mcl_filter.n_particles)
     mcl_filter.skip_timestamps(mcl_filter.start_timestamp)
     
     steps = 0
@@ -484,7 +421,7 @@ if __name__=="__main__":
             continue
 
         # Check if branch is close to any of the particles
-        pointcloud = mcl_filter.mcl_dml_filter.get_particles_as_pointcloud()
+        pointcloud = mcl_filter.dml_mcl.get_particles_as_pointcloud()
         expanded = []
         for exp_idx in range(len(branch_ids_to_expand)):
 
@@ -498,14 +435,14 @@ if __name__=="__main__":
             # and copy the particles to the other route
             if float(distances[closest_particle_id]) < 10:
                 b_name = branch_names[branch_id]
-                closest_route = int(mcl_filter.mcl_dml_filter.particles[closest_particle_id, 1])
+                closest_route = int(mcl_filter.dml_mcl.particles[closest_particle_id, 1])
                 mcl_filter.load_route_info(f"{mcl_filter.routes_dir}/{b_name}.yaml", branch_id)
-                mcl_filter.mcl_dml_filter.copy_to_route(closest_route, branch_id)
+                mcl_filter.dml_mcl.copy_to_route(closest_route, branch_id)
                 expanded.append(exp_idx)
 
         # Remove expanded branches from list
         for exp_idx in expanded:
             branch_ids_to_expand.pop(exp_idx)
         
-    mcl_filter.flush_results("C:/Users/carlo/Local_Workspace")
+    mcl_filter.pipeline_controller.flush_results("C:/Users/carlo/Local_Workspace")
     exit(0)
