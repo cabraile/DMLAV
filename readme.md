@@ -1,0 +1,60 @@
+About
+===========================================
+This repository contains the source code and documentation of the method proposed in the papers **A digital map-based Monte Carlo Localization for intelligent vehicles** and **A Gaussian approximation of the posterior for digital map-based localization using a particle filter**, submitted to the 24th *IEEE International Conference on Intelligent Transportation Systems (ITSC 2021)* in April, 2021.
+
+In this project, we propose performing global localization for autonomous vehicles using odometry information and coarse digital maps. Two types of features are used for the proposed localization method: landmarks and segment features.
+![landmark_localization](images/landmark_localization.png)
+![segment_localization](images/segment_feature_localization.png)
+
+Disclaimer: the Python implementation of the sign detection module was adapted from [this Ultralytics repository](https://github.com/ultralytics/yolov3) and the weights and network configuration files were used from the repository of [Martí Sánchez Juanola](https://github.com/martisaju/CARLA-Speed-Traffic-Sign-Detection-Using-Yolo).
+
+
+Material
+=================================================
+Data were collected using the intelligent vehicle CARINA II from the *Laboratório de Robótica Móvel* (Universidade de São Paulo, campus São Carlos - Brazil).
+
+The **collected data** (`csv` files for sensor data and `png` for image files) are available in this [link](https://drive.google.com/drive/folders/1pnjCgqEUxmjd9P2vzDNRHFrOtVp1vmHw?usp=sharing). Be aware that the data might be split into two different `zip` files.
+
+Instead of the raw data, if you are interested on the complete data in ROS ([Robot Operating System](https://www.ros.org/)) format, the ROS `bag` files are available [here](https://drive.google.com/drive/folders/18giw-eH9R1P60MwpYXnx0eQDewSdhfDw?usp=sharing). However, the project in this repository does not support ROS **yet**.
+
+The **map** used for the experiments (which contains landmark positions, branches and more) are available in this [link](https://drive.google.com/drive/folders/1Y8i5SaVC1KsOmFsevDwAwse4eniqsHLp?usp=sharing).
+
+How to run the demonstration
+=====================================
+**Setup**: clone this repository to your workspace and download the Python (this is a Python 3 project!) packages required for running this project. An option is to create an Anaconda environment using `conda env create --file=environment.yml`. All the packages required are enumerated in `environment.yml`.
+
+**First step**: download the dataset and the map on the repository links described above;
+
+**Second step**: in the map directory, for each branch file contained in `routes/`, replace every occurence of `/absolute/path/to` to the absolute path to the root directory of the map. Usually the shortcut `CTRL+H` is an available option for most text editors.
+
+**Third step**: in the map directory, for each file contained in `landmarks/files/` replace every occurrence of `/absolute/path/to` to the absolute path to the root directory of the map. (Yes, we know, this is a cumbersome step and we are working on improvements).
+
+**Fourth step**: in the dataset directory, replace in the file `images.csv` every occurrence of `/absolute/path/to` to the absolute path to the directory where the data are contained.
+
+**Fifth step**: in `scripts/config/dataset.yaml` change the value in `dataset_dir` to the directory of the dataset and `routes_dir` to the root directory of the downloaded map.
+
+**After doing all these steps**, hit `python scripts/benchmark.py` in the root directory of the downloaded repository.
+
+Running on different data
+=====================================
+If you are not interested in running this method on other datasets, there is no need to read the following lines and sections of this document.
+
+However, if you are interested in running this method on other datasets, either for benchmarking or for proposing improvements, you will have to delve further into the modules contained in this repository.
+
+The files contained in the `modules` folder are organized in a way that the proposed filter can be employed on different projects. They are organized in the following directories:
+- `demo`: code specifically for running the benchmark.
+- `features`: higher level abstraction of the features used in this project, as the segment feature and the landmark.
+- `filters`: the implementations of the digital map-based localization filters (in `dml`) and the extended Kalman Filter in `ekf` which fuses the global localization provided by one of the filters in `dml` to sensor data.
+- `perception`: landmark and sign detection tasks.
+
+Short-term TODO-list
+==================
+* Fill description of the modules in the readme.md file;
+* Complete the rest of the code's docstring
+* Implement a demo for a single filter at time;
+
+Long-term TODO-list
+============================
+* Integrate with OpenStreetMap API so that the map can be retrieved directly from there;
+* C++ implementation
+* ROS integration
