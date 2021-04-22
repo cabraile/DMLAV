@@ -33,6 +33,15 @@ class BoundingBox:
 
 class Detector:
 
+	"""
+	Adapted from the Ultralytics' yolov3 repository:
+	https://github.com/ultralytics/yolov3 .
+
+	This class detects and classify traffic signs. The Yolo module is responsible
+	for detecting a traffic sign, while the recognition module implemented in this
+	class classifies the sign.
+	"""
+
 	def __init__(self, threshold : float, flag_use_cpu : bool = True, reset_cache : bool = False):
 
 		"""
@@ -98,12 +107,42 @@ class Detector:
 	# ============================
 
 	def equalize_rgb(self, image_rgb : np.array) -> np.array:
+		""" 
+		Performs equalization on a coloured image. 
+
+		Parameters
+		==============
+		image_rgb: numpy.array.
+			The RGB input image to be equalized (nrows,ncols,3).
+		
+		Returns
+		==============
+		img : numpy.array.
+			The equalized image (nrows,ncols,3).
+		"""
 		img_hsv = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2HSV)
 		img_hsv[:,:,2] = cv2.equalizeHist(image_rgb[:,:,2])
 		img = cv2.cvtColor(img_hsv, cv2.COLOR_HSV2RGB)
 		return img
 
 	def augment(self, image_rgb : np.array, n_times : int = 10) -> list :
+		"""
+		Performs data augmentation for the sign classification module. 
+		The operations applied are: rotation, injection of random noise 
+		and Gaussian blur (with random sigma values).
+
+		Parameters
+		============
+		img_rgb: numpy.array.
+			The input RGB image (nrows,ncols,3).
+		n_times: int.
+			The number of times these operations are going to be performed.
+
+		Returns
+		============
+		l_images: list.
+			A list of (N_times * 3 + 1) elements, which are the augmented images (nrow,ncols,3).
+		"""
 		l_images = [image_rgb]
 		for i in range(n_times):
 			# pick a random degree of rotation between 25% on the left and 25% on the right
@@ -118,6 +157,22 @@ class Detector:
 		return l_images
 
 	def preprocess_recognition(self, img_rgb : np.array, equalize : bool = False) -> np.array:
+		""" 
+		Preprocessing operation for recognition. 
+		Performs rescale and, if required, image equalization is optional.
+		
+		Parameters
+		============
+		img_rgb: numpy.array.
+			The RGB image to be processed (nrow,ncol,3).
+		equalize: bool.
+			Whether to equalize the image or not. Defaults to False.
+
+		Returns
+		============
+		img_out: numpy.array
+			The processed image (nrow,ncol,3).
+		"""
 		img_tmp = img_rgb
 		if(equalize):
 			img_tmp = self.equalize_rgb(img_tmp)
@@ -126,6 +181,26 @@ class Detector:
 		return img_out
 
 	def letterbox(self, img_l : np.array, new_shape : int = 416, color : tuple = (128, 128, 128), mode : str ='auto') -> np.array :
+		""" 
+		Resize a rectangular image to a 32 pixel multiple rectangle,
+		https://github.com/ultralytics/yolov3/issues/232
+		
+		Parameters
+		==============
+		img_l : numpy.array.
+			The image to be resized.
+		new_shape : int.
+			The target shape dimension.
+		color: tuple.
+			The tuple of the RGB color used for the border.
+		mode: str.
+			The mode of padding. Accepted values: 'auto', 'square', 'rect' or 'scaleFill'.
+		Returns
+		==============
+		img_out: numpy.array.
+
+
+		"""
 		# Resize a rectangular image to a 32 pixel multiple rectangle
 		# https://github.com/ultralytics/yolov3/issues/232
 		shape = img_l.shape[:2]  # current shape [height, width]
@@ -156,8 +231,8 @@ class Detector:
 			img_l = cv2.resize(img_l, new_unpad, interpolation=cv2.INTER_AREA)  # INTER_AREA is better, INTER_LINEAR is faster
 		top, bottom = int(round(dh - 0.1)), int(round(dh + 0.1))
 		left, right = int(round(dw - 0.1)), int(round(dw + 0.1))
-		img_l = cv2.copyMakeBorder(img_l, top, bottom, left, right, cv2.BORDER_CONSTANT, value=color)  # add border
-		return img_l
+		img_out = cv2.copyMakeBorder(img_l, top, bottom, left, right, cv2.BORDER_CONSTANT, value=color)  # add border
+		return img_out
 
 	# ============================
 

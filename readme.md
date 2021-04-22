@@ -21,15 +21,15 @@ The **map** used for the experiments (which contains landmark positions, branche
 
 How to run the demonstration
 =====================================
-**Setup**: clone this repository to your workspace and download the Python (this is a Python 3 project!) packages required for running this project. An option is to create an Anaconda environment using `conda env create --file=environment.yml`. All the packages required are enumerated in `environment.yml`.
+**Setup**: clone this repository to your workspace and download the Python (this is a Python 3 project!) packages required for running this project. An option is to create an Anaconda environment using `conda env create --file=environment.yml`. All the packages required are enumerated in `environment.yml`. Notice that `tensorflow==2.4.1` the requires the CUDA toolkit version 11.0 and CuDNN 8.0.4.
 
 **First step**: download the dataset and the map on the repository links described above;
 
-**Second step**: in the map directory, for each branch file contained in `routes/`, replace every occurence of `/absolute/path/to` to the absolute path to the root directory of the map. Usually the shortcut `CTRL+H` is an available option for most text editors.
+**Second step**: in the map directory, for each branch file contained in `routes/`, replace every occurence of `/absolute/path/to/map` to the absolute path to the root directory of the map. Usually the shortcut `CTRL+H` is an available option for most text editors.
 
-**Third step**: in the map directory, for each file contained in `landmarks/files/` replace every occurrence of `/absolute/path/to` to the absolute path to the root directory of the map. (Yes, we know, this is a cumbersome step and we are working on improvements).
+**Third step**: in the map directory, for each file contained in `landmarks/files/` replace every occurrence of `/absolute/path/to/map` to the absolute path to the root directory of the map. (Yes, we know, this is a cumbersome step and we are working on improvements).
 
-**Fourth step**: in the dataset directory, replace in the file `images.csv` every occurrence of `/absolute/path/to` to the absolute path to the directory where the data are contained.
+**Fourth step**: in the dataset directory, replace in the file `images.csv` every occurrence of `/absolute/path/to/dataset` to the absolute path to the directory where the data are contained.
 
 **Fifth step**: in `scripts/config/dataset.yaml` change the value in `dataset_dir` to the directory of the dataset and `routes_dir` to the root directory of the downloaded map.
 
