@@ -86,7 +86,8 @@ class Wrapper:
         with open(dataset_cfg_path, "r") as f_yaml:
             args = yaml.load(f_yaml, Loader=yaml.FullLoader)
             self.dataset_dir = args["dataset_dir"]
-            self.routes_dir = args["routes_dir"]
+            self.map_dir = args["map_dir"]
+            self.routes_dir = self.map_dir + "/routes"
             self.init_route_id = args["init_route_id"]
             self.init_position = args["init_position"]
             self.init_variance = args["init_variance"]
@@ -111,7 +112,7 @@ class Wrapper:
         route = load_ways_from_dict(route_info["ways"], flag_to_utm=True)
         self.dml_mcl.add_route(idx, route)
         self.dml_gappf.add_route(idx, route)
-        route_landmarks = load_landmarks(route_info["landmarks"], self.fex, uids=self.landmarks["uid"].to_numpy())
+        route_landmarks = load_landmarks(self.map_dir, route_info["landmarks"], self.fex, uids=self.landmarks["uid"].to_numpy())
         if(route_landmarks is not None):
             self.landmarks = Wrapper.df_append_non_duplicates(self.landmarks, route_landmarks)
             self.landmarks.reset_index(inplace=True,drop=True)

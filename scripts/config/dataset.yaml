@@ -1,6 +1,6 @@
 
-dataset_dir: "C:/Users/carlo/Local_Workspace/Datasets/Dataset_DMBL"
-routes_dir: "C:/Users/carlo/Local_Workspace/Map/routes"
+dataset_dir: "/absolute/path/to/the/dataset"
+map_dir: "/absolute/path/to/the/map"
 init_route_id: 0
 init_position: 2.0
 init_variance: 1.0

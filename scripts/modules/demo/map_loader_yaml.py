@@ -64,14 +64,16 @@ def load_ways_from_dict(ways_dict : dict, flag_to_utm : bool = False) -> pd.Data
     df.set_index("seq_id", inplace=True)
     return df
 
-def load_landmarks(path_list : str, extractor : FeatureExtractor = None, uids = None) -> pd.DataFrame :
+def load_landmarks(map_dir : str, path_list : list, extractor : FeatureExtractor = None, uids : np.array = None) -> pd.DataFrame :
     """
     Given the list of path for each landmark YAML, load and store to a pandas.DataFrame
 
     Parameters
     ===========
+    map_dir : str.
+        The absolute path to the map's directory
     path_list: list.
-        The list of str of the absolute path for each landmark's yaml file.
+        The list of str of the path for each of landmark's yaml file wrt the map directory.
     extractor : FeatureExtractor.
         The feature extraction object.
     uids: array-like.
@@ -84,7 +86,8 @@ def load_landmarks(path_list : str, extractor : FeatureExtractor = None, uids = 
     """
     df = pd.DataFrame(columns=[ "uid", "name", "timestamp", "coordinates", "path", "rgb", "features"])
     images_list = []
-    for path in path_list:
+    for relative_path in path_list:
+        path = map_dir + "/" + relative_path
         with open(path, "r") as f:
             landmark_dict = yaml.load(f, Loader=yaml.FullLoader)
         # Coordinate conversion
@@ -96,7 +99,8 @@ def load_landmarks(path_list : str, extractor : FeatureExtractor = None, uids = 
         coordinates = np.array((easting_init, northing_init))
 
         # Load image
-        image_path = landmark_dict["path"]
+        image_relative_path = landmark_dict["path"]
+        image_path = map_dir + "/" + landmark_dict["path"]
         img_rgb = cv2.imread(image_path)[:,:,::-1]
         entry = {
             "uid" : uid , 

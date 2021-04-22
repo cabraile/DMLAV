@@ -14,6 +14,7 @@ class DataManager:
         msgs_dir: . 
             Contains the path of the CSV for each of the sensors.
         """
+        self.msgs_dir = msgs_dir
         self.data = {}
         self.cache = None
         ts_dtype = "uint64"
@@ -66,7 +67,8 @@ class DataManager:
                     ret[data_type] = self.data[data_type].loc[ts]
                 else:
                     ret[data_type] = None
-                    path = self.data[data_type].loc[ts]["path"]
+                    relative_path = self.data[data_type].loc[ts]["path"]
+                    path = self.msgs_dir + "/" + relative_path
                     try:
                         ret[data_type] = cv2.imread(path)[:,:,::-1]
                     except:

@@ -100,7 +100,9 @@ class Detector:
 			print("[Detector.py] Computing recognition model. Might take a while.")
 			self.load_recognition_model()
 			self.to_disk(self.cache_dir)
-			print("[Detector.py] Done computing the recognition model!")
+			print("[Detector.py] Done computing the recognition model! Saved to cached directory")
+		else:
+			print("[Detector.py] Loaded recognition model from cache!")
 		return
 
 	# IMAGE PROCESSING METHODS
@@ -450,6 +452,8 @@ class Detector:
 	def to_disk(self, save_dir : str) -> bool:
 		flag_saved_model = False
 		flag_saved_params = False
+		if not os.path.isdir(save_dir):
+			os.mkdir(save_dir)
 		with open(save_dir+"/recognition_model.data", "wb") as f_rec_model:
 			pickle.dump(self.recognition_model, f_rec_model)
 			flag_saved_model = True

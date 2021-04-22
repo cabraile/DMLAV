@@ -25,15 +25,9 @@ How to run the demonstration
 
 **First step**: download the dataset and the map on the repository links described above;
 
-**Second step**: in the map directory, for each branch file contained in `routes/`, replace every occurence of `/absolute/path/to/map` to the absolute path to the root directory of the map. Usually the shortcut `CTRL+H` is an available option for most text editors.
+**Second step**: in `scripts/config/dataset.yaml` change the value in `dataset_dir` to the directory of the dataset and `map_dir` to the root directory of the downloaded map.
 
-**Third step**: in the map directory, for each file contained in `landmarks/files/` replace every occurrence of `/absolute/path/to/map` to the absolute path to the root directory of the map. (Yes, we know, this is a cumbersome step and we are working on improvements).
-
-**Fourth step**: in the dataset directory, replace in the file `images.csv` every occurrence of `/absolute/path/to/dataset` to the absolute path to the directory where the data are contained.
-
-**Fifth step**: in `scripts/config/dataset.yaml` change the value in `dataset_dir` to the directory of the dataset and `routes_dir` to the root directory of the downloaded map.
-
-**After doing all these steps**, hit `python scripts/benchmark.py` in the root directory of the downloaded repository.
+**Third Step**, hit `python scripts/benchmark.py` in the root directory of the downloaded repository.
 
 Running on different data
 =====================================
