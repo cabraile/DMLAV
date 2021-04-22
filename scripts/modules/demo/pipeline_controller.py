@@ -2,6 +2,7 @@ from modules.filters.ekf.ekf_pose_2d                    import EKFPose2D
 from modules.metrics                                    import FilterMetrics
 import utm
 import numpy as np
+import os
 class PipelineController:
 
     def __init__(self):
@@ -145,6 +146,8 @@ class PipelineController:
         return
     
     def flush_results(self, directory : str):
+        if not os.path.isdir(directory):
+            os.mkdir(directory)
         trajectory_array = np.vstack(self.groundtruth_trajectory)
         np.savetxt(directory + f"/trajectory_groundtruth.csv", trajectory_array, delimiter=",", fmt="%.3f")
         for p_name in self.pipeline_names:

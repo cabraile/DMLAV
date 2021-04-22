@@ -116,7 +116,7 @@ class Wrapper:
         if(route_landmarks is not None):
             self.landmarks = Wrapper.df_append_non_duplicates(self.landmarks, route_landmarks)
             self.landmarks.reset_index(inplace=True,drop=True)
-        self.viz.draw_route(idx, self.dml_mcl.routes[idx])
+        self.viz.draw_route(idx, self.dml_mcl.routes[idx],use_color_demo=True)
         self.viz.update_landmarks( np.vstack(self.landmarks["coordinates"]) )
         return
 
@@ -439,5 +439,5 @@ if __name__=="__main__":
         for exp_idx in expanded:
             branch_ids_to_expand.pop(exp_idx)
         
-    mcl_filter.pipeline_controller.flush_results("C:/Users/carlo/Local_Workspace")
+    mcl_filter.pipeline_controller.flush_results(directory = ".results")
     exit(0)

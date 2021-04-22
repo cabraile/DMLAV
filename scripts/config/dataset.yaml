@@ -1,6 +1,6 @@
 
-dataset_dir: "/absolute/path/to/the/dataset"
-map_dir: "/absolute/path/to/the/map"
+dataset_dir: "/home/andre/Workspace/Dataset/DMBL"
+map_dir: "/home/andre/Workspace/Dataset/DMBL/map"
 init_route_id: 0
 init_position: 2.0
 init_variance: 1.0

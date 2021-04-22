@@ -46,6 +46,13 @@ class Visualization:
         self.camera_plot = None
         self.confidence_ellipse = {"main" : None, "zoom" : None}
         self.already_plotted_routes = []
+        
+        self.route_colors = {
+            0 : "blue", 
+            1 : "green", 
+            2: "magenta", 
+            3 : "orange"
+        }
 
         # Iteractive figure
         plt.ion()
@@ -66,8 +73,8 @@ class Visualization:
 
         # Instantiation of the scatter plots.
         
-        self.particles_scatter_plots["main"] = self.axes["main"].scatter([], [], cmap="rainbow", marker="x", label="Particles") # color = "black"
-        self.particles_scatter_plots["zoom"] = self.axes["zoom"].scatter([], [], cmap="rainbow", marker="x")  # color = "black"
+        self.particles_scatter_plots["main"] = self.axes["main"].scatter([], [], cmap="black", marker="x", label="Particles") # color = "black"
+        self.particles_scatter_plots["zoom"] = self.axes["zoom"].scatter([], [], cmap="black", marker="x")  # color = "black"
         self.groundtruth_scatter_plots["main"] = self.axes["main"].scatter([], [], color="red", s=100, marker="*", label="Groundtruth")
         self.groundtruth_scatter_plots["zoom"] = self.axes["zoom"].scatter([], [], color="red", s=100, marker="*")
         self.landmarks_scatter_plots["main"] = self.axes["main"].scatter([], [], color="green", s=200, marker="v", label="Landmark")
@@ -112,6 +119,7 @@ class Visualization:
 
         return xs, ys
 
+    # TODO: Check if used. Otherwise, remove
     def draw_routes(self, ways_dict: dict):
         """ Plot each route of the map. 
         
@@ -131,7 +139,7 @@ class Visualization:
             self.routes_plots["zoom"] = self.axes["zoom"].plot(xs, ys)
         return 
 
-    def draw_route(self, route_id : int, way_df: pd.DataFrame):
+    def draw_route(self, route_id : int, way_df: pd.DataFrame, use_color_demo : bool = False):
         """ Plot a route in the map. 
         
         Parameters
@@ -140,12 +148,16 @@ class Visualization:
         # Iterate over each of the routes' ways
         xs, ys = self.get_waypoints(way_df)
 
+        color = None
+        if use_color_demo:
+            color = self.route_colors[route_id]
+
         # Plot the coordinates
-        self.axes["main"].plot(xs, ys, label=f"Route {route_id}")
-        self.axes["zoom"].plot(xs, ys)
+        self.axes["main"].plot(xs, ys, "-o", label=f"Route {route_id}", c=color)
+        self.axes["zoom"].plot(xs, ys, "-o", c=color)
         return 
 
-    def update_particles(self, pointcloud : np.array, weights : np.array = None):
+    def update_particles(self, pointcloud : np.array):
         """
         Update the particles' positions in the scatter plot.
 
@@ -158,10 +170,6 @@ class Visualization:
         """
         for axis_name in ["main", "zoom"]:
             self.particles_scatter_plots[axis_name].set_offsets(pointcloud)
-            if(weights is not None):
-                self.particles_scatter_plots[axis_name].set_array(weights)
-                self.particles_scatter_plots[axis_name].set_clim([weights.min(), weights.max()])
-        
         return
 
     def update_groundtruth(self, groundtruth : np.array, zoom : float = 50):
@@ -192,10 +200,10 @@ class Visualization:
                 # Draw 
                 ellipse = Ellipse((cx, cy), width, height, angle)
                 ellipse.set_fill(True)
-                ellipse.set_linewidth(4)
+                ellipse.set_linewidth(1)
                 ellipse.set_label(method)
-                ellipse.set_alpha(0.5)
-                ellipse.set_edgecolor("black")
+                ellipse.set_alpha(0.8)
+                ellipse.set_edgecolor("red")
                 ellipse.set_facecolor("green")
                 self.confidence_ellipse[axis_type] = ellipse
                 self.axes[axis_type].add_patch(self.confidence_ellipse[axis_type])
