@@ -13,7 +13,7 @@ Material
 =================================================
 Data were collected using the intelligent vehicle CARINA II from the *Laboratório de Robótica Móvel* (Universidade de São Paulo, campus São Carlos - Brazil).
 
-The **collected data** (`csv` files for sensor data and `png` for image files) are available in this [link](https://drive.google.com/drive/folders/1pnjCgqEUxmjd9P2vzDNRHFrOtVp1vmHw?usp=sharing). Be aware that the data might be split into two different `zip` files.
+The **collected data** (`csv` files for sensor data and `png` for image files) are available in this [link](https://drive.google.com/drive/folders/1pnjCgqEUxmjd9P2vzDNRHFrOtVp1vmHw?usp=sharing). Be aware that the data might be split into two different `zip` files. If it takes too long for the Google Drive to compress the images, there is a directory, `images_compressed`, in which the images are already compressed. The extracted images must be inside an `images` directory inside the root directory.
 
 Instead of the raw data, if you are interested on the complete data in ROS ([Robot Operating System](https://www.ros.org/)) format, the ROS `bag` files are available [here](https://drive.google.com/drive/folders/18giw-eH9R1P60MwpYXnx0eQDewSdhfDw?usp=sharing). However, the project in this repository does not support ROS **yet**.
 
