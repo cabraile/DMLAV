@@ -21,7 +21,7 @@ The **map** used for the experiments (which contains landmark positions, branche
 
 How to run the demonstration
 =====================================
-**Setup**: clone this repository to your workspace and download the Python (this is a Python 3 project!) packages required for running this project. An option is to create an Anaconda environment using `conda env create --file=environment.yml`. All the packages required are enumerated in `environment.yml`. Notice that `tensorflow==2.4.1` the requires the CUDA toolkit version 11.0 and CuDNN 8.0.4.
+**Setup**: clone this repository to your workspace and download the Python (this is a Python 3 project!) packages required for running this project. An option is to create an Anaconda environment using `conda env create --file=environment.yml`. All the packages required are enumerated in `environment.yml`. Notice that the conda environment will manage the CUDA version for this application, if a graphics card is available. Make sure the graphics drivers are installed, otherwise tensorflow will not detect the GPU.
 
 **First step**: download the dataset and the map on the repository links described above;
 
