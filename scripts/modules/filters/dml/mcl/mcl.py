@@ -7,12 +7,16 @@ from modules.filters.dml.map_representation import from_map_representation_to_xy
 from modules.features.segment_feature import SegmentFeature
 from modules.features.landmark_feature import LandmarkFeature
 from modules.features.global_positioning_feature import GlobalPositioningFeature
+from modules.features.feature import Feature
 
 # TODO LIST:
 # * Remove weights from the state. They are only used during update.
-
+# * Rename from 'DMLMCL' to 'DMMCL'
 class DMLMCL:
-    
+    """
+    Implements the 'Digital Map-based Monte Carlo Localization' method.
+    """
+
     def __init__(self):
         self.routes = {}
         self.particles = None
@@ -22,7 +26,15 @@ class DMLMCL:
     # STATE
     # ==========================
 
-    def check_is_localized(self):
+    def check_is_localized(self) -> bool:
+        """
+        Indicates whether the estimation is reliable (localized) or not.
+
+        Returns
+        ====
+        bool. 
+            True if the estimation is localized (one hypothesis on the set of hypotheses). False otherwise.
+        """
         p_routes = self.particles[:,1]
         unique_routes = set(p_routes)
         if len(unique_routes) > 1:
@@ -30,21 +42,49 @@ class DMLMCL:
         return True
 
     def get_mean(self) -> np.array:
+        """ 
+        Get the state mean in x,y coordinates. 
+        Warning: it does not check if the method is localized! 
+
+        Returns
+        =========
+        mean: numpy.array.
+            The mean (x,y) position of the estimation.
+        """
         pointcloud = self.get_particles_as_pointcloud()
         mean = np.mean( pointcloud, axis=0 )
         return 
     
     def get_covariance(self) -> np.array:
+        """ 
+        Get the covariance of the estimation in x,y coordinates. 
+        Warning: it does not check if the method is localized! 
+
+        Returns
+        =========
+        covariance: numpy.array.
+            The covariance of the estimation.
+        """
         pointcloud = self.get_particles_as_pointcloud()
         covariance = EmpiricalCovariance().fit(pointcloud).covariance_
         return covariance
     
     def get_mean_and_covariance(self) -> Union[np.array, np.array] :
+        """ 
+        Get the mean and covariance in x,y coordinates. 
+        Warning: it does not check if the method is localized! 
+
+        Returns
+        =========
+        mean: numpy.array.
+            The mean (x,y) position of the estimation.
+        covariance: numpy.array.
+            The covariance of the estimation.
+        """
         pointcloud = self.get_particles_as_pointcloud()
         mean = np.mean( pointcloud, axis=0 )
         covariance = EmpiricalCovariance().fit(pointcloud).covariance_
         return mean, covariance
-
 
     # ==========================
 
@@ -52,12 +92,23 @@ class DMLMCL:
     # ==========================
     
     def add_route(self, route_id : int, ways : pd.DataFrame):
+        """
+        Add a route to the set of routes.
+
+        Parameters
+        ===========
+        route_id: int.
+            The identifier of the route.
+        ways: pandas.DataFrame.
+            The DataFrame of the information of ways contained in the route.
+        """
         self.routes[route_id] = ways
         return
       
     def get_particles_as_pointcloud(self) -> np.array:
         """
         Provide the particles as a 2D array of their x,y positions.
+
         Returns
         ==========
         coords_array: numpy.array.
@@ -89,7 +140,6 @@ class DMLMCL:
             The route index to be assigned for each particle.
         """
         assert route_id in self.routes, "Error: route not initialized yet!"
-        #particles = sample_particles(mu = mean, sigma = std, n_particles = n_particles, route_idx = route_id)
         particles_x = np.random.normal(loc=mean, scale=std, size=(n_particles,1))
         particles_r = np.full((n_particles,1), fill_value=route_id ,dtype="uint32")
         particles_w = np.ones((n_particles,1),dtype=float)
@@ -102,6 +152,18 @@ class DMLMCL:
         return
     
     def copy_to_route(self, from_idx : int, to_idx : int):
+        """
+        Copies particles from a route to another route.
+
+        Parameters
+        =======
+        from_idx: int.
+            The identifier of the route from which the hypothesis's 
+            distribution is going to be copied.
+        to_idx: int.
+            The identifier of the route to which the hypothesis's
+            distribution is going to be copied. 
+        """
         ids_copy = np.where( self.particles[:,1] == from_idx )
         particles_copy = np.copy(self.particles[ids_copy,:]).reshape(-1,3)
         particles_copy[:,1] = to_idx
@@ -111,6 +173,15 @@ class DMLMCL:
         return
     
     def resample(self, weights : np.array):
+        """
+        Performs low variance sampling, so that particles are sampled 
+        proportionally to their weights, but respecting the weights' variance.
+
+        Parameters
+        ========
+        weights: numpy.array.
+            The array of particles' weights.
+        """
         ids = DMLMCL.low_variance_sampler(weights)
         self.particles = self.particles[ids,:]
         return
@@ -170,8 +241,6 @@ class DMLMCL:
         odom_var: float.
             The variance of the odometry.
         """
-        #motion_model(self.particles, odom, odom_var)
-
         n_particles = self.particles.shape[0]
 
         # Sample the new particles from the motion model
@@ -186,7 +255,15 @@ class DMLMCL:
     # UPDATE-RELATED TASKS
     # ==========================
 
-    def update(self, feature) :
+    def update(self, feature : Feature) :
+        """
+        Computes the weights for each particle and resamples given a measured feature.
+
+        Parameters
+        ============
+        feature: Feature-inherited objects.
+            The measured feature detected. 
+        """
         N = self.n_particles
         likelihoods = np.empty((N,)) 
         if isinstance(feature,LandmarkFeature) or isinstance(feature, GlobalPositioningFeature):

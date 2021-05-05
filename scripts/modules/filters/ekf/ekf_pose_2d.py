@@ -2,6 +2,10 @@ import numpy as np
 from modules.filters.ekf.ekf import EKF
 
 class EKFPose2D(EKF):
+    """
+    Implements the 2D EKF used for fusing odometry measurements and 
+    global position (DML methods) and pose estimations (GNSS methods).
+    """
 
     def __init__(self, prior_mean : np.array, prior_covariance : np.array, motion_model_type : str, measurement_model_type : str):
         """
@@ -32,6 +36,21 @@ class EKFPose2D(EKF):
         return
 
     def g_odometry(self, u : np.array, x : np.array) -> np.array:
+        """
+        The motion model when the control command received is an odometry.
+
+        Parameters 
+        ==========
+        u: numpy.array.
+            The odometry received of shape (3,1)
+        x: numpy.array.
+            The state before motion of shape (3,1)
+
+        Returns
+        ==========
+        g_x: numpy.array.
+            The state after prediction. Shape (3,1).
+        """
         c = np.cos(x[2,0])
         s = np.sin(x[2,0])
         g_x = np.array([
@@ -42,6 +61,21 @@ class EKFPose2D(EKF):
         return g_x
     
     def G_odometry(self, u : np.array, x : np.array) -> np.array:
+        """
+        The jacobian of the motion model when the control command received is an odometry.
+
+        Parameters 
+        ==========
+        u: numpy.array.
+            The odometry received of shape (3,1)
+        x: numpy.array.
+            The state before motion of shape (3,1)
+
+        Returns
+        ==========
+        G_x: numpy.array.
+            The jacobian of the motion model. Shape (3,3).
+        """
         c = np.cos(x[2,0])
         s = np.sin(x[2,0])
         G_x = np.array([
@@ -52,13 +86,61 @@ class EKFPose2D(EKF):
         return G_x
     
     def h_position(self, x : np.array) -> np.array:
+        """
+        The measurement model when the measurement to be estimated is the position.
+
+        Parameters 
+        ==========
+        x: numpy.array.
+            The state for estimating the measurement. Shape =(3,1)
+
+        Returns
+        ==========
+        The state's (x,y) position. Shape = (2,1).
+        """
         return x[0:2, 0].reshape(2,1)
 
     def H_position(self, x : np.array) -> np.array:
+        """
+        The jacobian of the measurement model when the measurement to be estimated is the position.
+
+        Parameters 
+        ==========
+        x: numpy.array.
+            The state for estimating the measurement. Shape = (3,1)
+
+        Returns
+        ==========
+        The 2x2 identity matrix.
+        """
         return np.eye(2, x.shape[0])
     
     def h_pose(self, x : np.array) -> np.array:
+        """
+        The measurement model when the measurement to be estimated is the pose.
+
+        Parameters 
+        ==========
+        x: numpy.array.
+            The state for estimating the measurement. Shape =(3,1)
+
+        Returns
+        ==========
+        The state's (x,y,yaw) position. Shape = (3,1).
+        """
         return x
 
     def H_pose(self, x : np.array) -> np.array:
+        """
+        The jacobian of the measurement model when the measurement to be estimated is the pose.
+
+        Parameters 
+        ==========
+        x: numpy.array.
+            The state for estimating the measurement. Shape = (3,1)
+
+        Returns
+        ==========
+        The 3x3 identity matrix.
+        """
         return np.eye(x.shape[0])

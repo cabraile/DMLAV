@@ -1,7 +1,8 @@
 import pandas as pd
+from modules.features.feature import Feature
 from typing import Any
 
-class SegmentFeature():
+class SegmentFeature(Feature):
 
     def __init__(self, information : Any, info_type : str, model_sensitivity : float, model_fpr : float):
         """

@@ -1,8 +1,9 @@
 from typing import Any
 import numpy as np
 from modules.pdf import multivariate_gaussian_pdf
+from modules.features.feature import Feature
 
-class GlobalPositioningFeature():
+class GlobalPositioningFeature(Feature):
 
     def __init__(self, position : np.array, covariance = np.array ):
         """

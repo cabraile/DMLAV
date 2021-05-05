@@ -3,7 +3,13 @@ from modules.metrics                                    import FilterMetrics
 import utm
 import numpy as np
 import os
+
 class PipelineController:
+
+    """
+    This class is responsible for fusing local and global localization estimations for
+    different pipelines. Used for benchmarking.
+    """
 
     def __init__(self):
 
@@ -64,6 +70,20 @@ class PipelineController:
      # PREDICTION
     
     def init_ekf(self, lat : float, lon : float, yaw : float, cov_diagonal : np.array):
+        """
+        Provided the first 2D pose, inits the EKFs for each of the pipelines.
+
+        Parameters
+        =============
+        lat: float.
+            The initial estimated latitude.
+        lon: float.
+            The initial estimated longitude.
+        yaw: float.
+            The initial estimated yaw.
+        cov_diagonal.
+            The covariance diagonal values.
+        """
         x,y,_,_ = utm.from_latlon(lat, lon)
         init_state = np.array([x, y, yaw]).reshape(3,1)
         init_cov = np.diag(cov_diagonal)
@@ -72,6 +92,10 @@ class PipelineController:
         return
 
     def append_current_state_to_trajectory(self):
+        """
+        Appends all the estimations for each respective trajectory. 
+        Used for visualization of the estimated trajectories.
+        """
         for p_name in self.pipeline_names:
             mean = self.ekf[p_name].get_mean()
             cov = self.ekf[p_name].get_covariance()
@@ -81,13 +105,30 @@ class PipelineController:
         return
 
     def set_current_groundtruth(self, groundtruth : np.array):
+        """ 
+        Parameters
+        =========
+        groundtruth: numpy.array.
+            The flattened 2D array of the groundtruth in UTM coordinates.
+        """
         self.groundtruth = groundtruth
         return
 
     # PREDICTION
     # ======================
 
-    def odometry_prediction(self, u, cov):
+    def odometry_prediction(self, u : np.array, cov : np.array):
+        """ 
+        Performs prediction given an odometry provided.
+
+        Parameters
+        =============
+        u: numpy.array.
+            The array of shape=(3,1) of the offset in the x, y and in the orientation w.r.t. the 
+            previous frame.
+        cov: numpy.array.
+            The array of shape(3,3) of the covariance between the x,y and yaw variables of the odometry.
+        """
         for p_name in self.pipeline_names:
             if p_name in self.pipeline_names_that_use_odometry:
                 self.ekf[p_name].predict(u, cov)
@@ -100,7 +141,7 @@ class PipelineController:
     # UPDATES
     # ======================
 
-    def gps_update(self, z, cov):
+    def gps_update(self, z : np.array, cov : np.array):
         """
         Parameters
         ==============
@@ -113,7 +154,19 @@ class PipelineController:
             self.ekf[p_name].update(z,cov)
         return
 
-    def mcl_update(self, mean, cov, is_localized):
+    def mcl_update(self, mean : np.array, cov : np.array, is_localized : bool):
+        """ 
+        Performs the update step for the MCL-based global position estimation.
+
+        Parameters
+        ===============
+        mean: numpy.Array.
+            The mean position of the estimation. Shape = (2,1)
+        cov: numpy.Array.
+            The covariance of the position estimation. Shape = (2,2)
+        is_localized: bool.
+            Whether the source of global position estimation is localized or not.
+        """
         if is_localized:
             # Covariance cannot be close to zero - so underestimate the MCL measurement is a possibility.
             if np.abs(np.linalg.det(cov)) < 1e-9:
@@ -123,7 +176,19 @@ class PipelineController:
                 self.ekf[p_name].update(mean.reshape(2,1), cov)
         return
 
-    def gappf_update(self, mean, cov, is_localized):
+    def gappf_update(self, mean : np.array, cov : np.array, is_localized : bool):
+        """ 
+        Performs the update step for the GAPPF-based global position estimation.
+
+        Parameters
+        ===============
+        mean: numpy.Array.
+            The mean position of the estimation. Shape = (2,1)
+        cov: numpy.Array.
+            The covariance of the position estimation. Shape = (2,2)
+        is_localized: bool.
+            Whether the source of global position estimation is localized or not.
+        """
         if is_localized:
             # Covariance cannot be close to zero - so underestimate the MCL measurement is a possibility.
             if np.abs(np.linalg.det(cov)) < 1e-9:
@@ -137,6 +202,10 @@ class PipelineController:
     # ======================
 
     def compute_metrics(self):
+        """ 
+            Compute for the current estimated states the rmsd error between the 
+            position and the groundtruth. 
+        """
         for p_name in self.pipeline_names:
             avg_pose = self.ekf[p_name].get_mean().flatten()
             avg_position = avg_pose[:2]
@@ -146,6 +215,15 @@ class PipelineController:
         return
     
     def flush_results(self, directory : str):
+        """
+        Saves the metrics and estimated trajectories to the disk.
+
+        Parameters
+        ===========
+        directory: str.
+            The absolute path to the directory where the metrics and 
+            trajectories are going to be stored.
+        """
         if not os.path.isdir(directory):
             os.mkdir(directory)
         trajectory_array = np.vstack(self.groundtruth_trajectory)

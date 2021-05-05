@@ -5,6 +5,16 @@ import os
 DEFAULT_CACHE_PATH = "cached_descriptors.csv"
 
 class DataManager:
+    """
+    DataManager is responsible for loading sensor data from CSV files and managing their timestamps.
+
+    Methods
+    ============
+    next: Used for retrieving the next message following the timestamps.
+        If no other message is available, raises an Exception.
+    reset: Resets the current time so that next() returns the first message available.
+    has_next: Used for verifying if the next message exists.
+    """
 
     def __init__(self, msgs_dir : str):
         """

@@ -1,9 +1,21 @@
 import numpy as np
 
 class EKF:
+    """
+    Implements the general Extended Kalman Filter which - in this project - is responsible for
+    fusing local and global estimations provided by the proposed methods.
+    """
 
     def __init__(self, prior_mean : np.array, prior_covariance : np.array):
-        self.mean = prior_mean
+        """
+        Parameters
+        =================
+        prior_mean: numpy.array.
+            The initial pose provided.
+        prior_covariance: numpy.array
+            The initial pose covariance.
+        """
+        self.mean = prior_mean.reshape(-1,1)
         self.covariance = prior_covariance
         return
 
@@ -11,9 +23,21 @@ class EKF:
     # ==============================================
 
     def get_mean(self) -> np.array:
+        """
+        Returns
+        ==========
+        self.mean: numpy.array.
+            The current estimation mean.
+        """
         return self.mean
 
     def get_covariance(self) -> np.array:
+        """
+        Returns
+        ==========
+        self.covariance: numpy.array.
+            The current estimation covariance.
+        """
         return self.covariance
 
     # ==============================================
@@ -22,18 +46,52 @@ class EKF:
     # ==============================================
 
     def set_motion_model(self, g: callable):
+        """
+        Defines the motion model function used by the filter.
+
+        Parameters
+        ============
+        g: callable.
+            The function g(u,x) maps the state x to the next predicted state given the
+            action command u. Returns a numpy array of the same shape as the state.
+        """
         self.g = g
         return
 
     def set_jacobian_motion_model(self, G : callable):
+        """
+        Defines the jacobian of the motion model function used by the filter.
+
+        Parameters
+        ============
+        G: callable.
+            The function G(u,x) is the jacobian of g.
+        """
         self.G = G
         return
     
     def set_measurement_model(self, h: callable):
+        """
+        Defines the measurement model function used by the filter.
+
+        Parameters
+        ============
+        h: callable.
+            The function h(x) which provides the estimated measurement at the state x. 
+            Returns a numpy array of the same shape as the measurement.
+        """
         self.h = h
         return
 
     def set_jacobian_measurement_model(self, H : callable):
+        """
+        Defines the jacobian of the measurement model function used by the filter.
+
+        Parameters
+        ============
+        h: callable.
+            The function H(x) which provides the jacobian of the estimated measurement at the state x.
+        """
         self.H = H
         return
 
@@ -43,13 +101,38 @@ class EKF:
     # ==============================================
 
     def predict(self, u : np.array, u_cov : np.array):
+        """
+        Performs prediction of the next state's mean and covariance.
+
+        Parameters
+        ============
+        u: numpy.array.
+            The action command (odometry, velocity or any other kind).
+        u_cov: numpy.array.
+            The covariance of the action command.
+        """
         g = self.g
         G = self.G(u, self.mean)
         self.mean = g(u, self.mean)
         self.covariance = np.dot(np.dot(G, self.covariance), G.T) + np.dot(np.dot(G, u_cov), G.T)
         return
 
-    def update(self, z : np.array, Q :np.array):
+    def update(self, z : np.array, Q :np.array) -> np.array:
+        """
+        Performs correction of the predicted state's mean and covariance.
+
+        Parameters
+        ============
+        z: numpy.array.
+            The measurement of the environment.
+        Q: numpy.array.
+            The covariance of the measurement model.
+        
+        Returns
+        ============
+        K: numpy.array.
+            The Kalman gain computed during the current iteration.
+        """
         S = self.covariance
         H = self.H(self.mean)
         h = self.h
@@ -62,8 +145,7 @@ class EKF:
         self.mean = mu + np.dot(K, (z - h(mu)))
         self.covariance = np.dot( ( I - np.dot(K, H) ), S )
         return K
-
-    
+ 
     # ==============================================
 
 if __name__ == "__main__":

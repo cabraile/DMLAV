@@ -119,26 +119,6 @@ class Visualization:
 
         return xs, ys
 
-    # TODO: Check if used. Otherwise, remove
-    def draw_routes(self, ways_dict: dict):
-        """ Plot each route of the map. 
-        
-        Parameters
-        ============
-        ways_dict: dict.
-            The dictionary of dataframes representing the ways for each route.
-        """
-        # Iterate over each of the routes' ways
-        route_ids = ways_dict.keys()
-        for route_id in reversed(route_ids):
-            way_df = ways_dict[route_id]
-            xs, ys = self.get_waypoints(way_df)
-
-            # Plot the coordinates
-            self.routes_plots["main"] = self.axes["main"].plot(xs, ys, label=label)
-            self.routes_plots["zoom"] = self.axes["zoom"].plot(xs, ys)
-        return 
-
     def draw_route(self, route_id : int, way_df: pd.DataFrame, use_color_demo : bool = False):
         """ Plot a route in the map. 
         
