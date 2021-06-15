@@ -1,13 +1,12 @@
 About
 ===========================================
-This repository contains the source code and documentation of the method proposed in the papers **A digital map-based Monte Carlo Localization for intelligent vehicles** and **A Gaussian approximation of the posterior for digital map-based localization using a particle filter**, submitted to the 24th *IEEE International Conference on Intelligent Transportation Systems (ITSC 2021)* in April, 2021.
+This repository contains the source code and documentation of the method proposed in the papers **A Gaussian approximation of the posterior for digital map-based localization using a particle filter**, accepted at the 24th *IEEE International Conference on Intelligent Transportation Systems (ITSC 2021)*.
 
 In this project, we propose performing global localization for autonomous vehicles using odometry information and coarse digital maps. Two types of features are used for the proposed localization method: landmarks and segment features.
 ![landmark_localization](images/landmark_localization.png)
 ![segment_localization](images/segment_feature_localization.png)
 
 Disclaimer: the Python implementation of the sign detection module was adapted from [this Ultralytics repository](https://github.com/ultralytics/yolov3) and the weights and network configuration files were used from the repository of [Martí Sánchez Juanola](https://github.com/martisaju/CARLA-Speed-Traffic-Sign-Detection-Using-Yolo).
-
 
 Material
 =================================================
