@@ -1,3 +1,17 @@
+DISCLAIMER FOR THE IV2022 REVIEWERS
+===========================================
+Dear reviewer,
+
+When I submitted the paper on thursday (11/March), I was hoping to update it until the deadline. However, when I was to submit the updated version in 15/Mar I was unable to do it: the system pointed that the paper was already under review process. The paper you are reviewing is severely outdated in many aspects (including the poor results) and provides the link to this repository. 
+
+Since I was unable to update the paper in the Papercept System (I already contacted the organizers regarding my situation), I kindly ask you to read the updated version of the paper, which is available in [this repository](https://github.com/cabraile/Mapless-MCL-ROS).
+
+I understand that this would go against the guidelines for the peer-review process, however, since I still did not hear from the organizers, I found myself without further alternatives.
+
+Once again, thank you for understanding the situation!
+
+**This section will be removed after the IV2022 reviewing process**
+
 About
 ===========================================
 This repository contains the source code and documentation of the method proposed in the papers **A Gaussian approximation of the posterior for digital map-based localization using a particle filter**, accepted at the 24th *IEEE International Conference on Intelligent Transportation Systems (ITSC 2021)*.
